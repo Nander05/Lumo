@@ -438,6 +438,7 @@ function viewMensen() {
 
 /* ---------- Coach ---------- */
 function viewCoach() {
+  coachPull();
   const c = state.coach, cl = allContacts();
   const msgs = c.msgs.map((m, i) => '<div class="msg ' + m.role + '">' + (m.role === 'assistant' ? md(m.text || '…') + (m.text && !c.busy ? '<div class="tools"><button class="btn ghost small" data-act="copy" data-i="' + i + '">Kopieer</button><button class="btn ghost small" data-act="to-check" data-i="' + i + '">Controleer</button></div>' : '') : esc(m.text).replace(/\n/g, '<br>')) + '</div>').join('');
   const chips = [['Dagplan', 'Maak een dagplan voor vandaag. Maximaal drie acties.'], ['Weekplan', 'Maak een weekplan met maximaal drie prioriteiten en per dag één concrete actie.'], ['Check-in', 'Doe een korte avondcheck-in met me: wat ging goed en wat is morgen de eerste stap?'], ['Promotie uitleggen', 'Leg de huidige promoties kort en eerlijk uit, alleen op basis van de bibliotheek.'], ['Gesprek voorbereiden', 'Help me een eerste gesprek voorbereiden met iemand die nieuwsgierig is naar wellness.']];
@@ -1304,6 +1305,15 @@ function captureInputs() {
   const ty = $('#ct-type'); if (ty) state.content.type = ty.value;
   const c = $('#chk-text'); if (c) state.check.text = c.value;
 }
+function coachPull() {
+  const c = state.coach, d = state.docs['coach-chat']; if (c.busy || !d) return;
+  if (c.at !== d.updatedAt) { c.msgs = (d.msgs || []).map(m => ({ role: m.role, text: m.text })); c.at = d.updatedAt; }
+}
+function coachPush() {
+  const c = state.coach, at = new Date().toISOString();
+  const msgs = c.msgs.filter(m => m.text).slice(-40).map(m => ({ role: m.role, text: String(m.text).slice(0, 8000) }));
+  c.at = at; save('coach-chat', { msgs, updatedAt: at });
+}
 async function coachSend(text) {
   const c = state.coach; text = (text || '').trim(); if (!text || c.busy) return;
   c.msgs.push({ role: 'user', text }); c.draft = ''; c.busy = true; { const ci = $('#coachInput'); if (ci) { ci.value = ''; ci.style.height = 'auto'; } }
@@ -1313,7 +1323,7 @@ async function coachSend(text) {
     const full = await aiStream(null, c.msgs.slice(0, -1), t => { reply.text = t; const els = document.querySelectorAll('#chat .msg.assistant'), el = els[els.length - 1]; if (el) { el.innerHTML = md(t); scrollChat(); } }, c.ctrl.signal);
     if (full) reply.text = full;
   } catch (e) { reply.text = reply.text || (e && e.code === 'none' ? 'De coach is in deze weergave niet beschikbaar. Open Lumo via claude.ai.' : aiErr(e)); }
-  c.busy = false; c.ctrl = null; render(); scrollChat();
+  c.busy = false; c.ctrl = null; coachPush(); render(); scrollChat();
 }
 async function briefRun() {
   state.brief = { text: '', busy: true }; render();
@@ -1423,7 +1433,7 @@ async function onAct(a, el, ev) {
   if (a === 'coach-chip') { markLibSeen(); state.view = 'coach'; render(); coachSend(d.prompt); return; }
   if (a === 'coach-send') { coachSend($('#coachInput').value); return; }
   if (a === 'coach-stop') { if (state.coach.ctrl) state.coach.ctrl.abort(); return; }
-  if (a === 'coach-reset') { state.coach.msgs = []; render(); return; }
+  if (a === 'coach-reset') { state.coach.msgs = []; coachPush(); render(); return; }
   if (a === 'copy') { copyText(state.coach.msgs[parseInt(d.i, 10)].text); return; }
   if (a === 'to-check') { state.check.text = state.coach.msgs[parseInt(d.i, 10)].text; state.check.local = null; state.check.ai = null; state.view = 'groei'; state.sub.groei = 'Controle'; render(); return; }
   if (a === 'brief-run') { briefRun(); return; }
