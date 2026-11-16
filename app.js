@@ -1045,7 +1045,7 @@ function campDialog(d) {
       '<div class="row"><button class="btn" data-act="camp-person-save" data-id="' + esc(d.id) + '" data-camp="' + esc(d.camp) + '">Opslaan</button><button class="btn ghost" data-act="overlay-close">Annuleer</button><span class="spacer"></span><button class="btn danger" data-act="camp-person-del" data-id="' + esc(d.id) + '" data-camp="' + esc(d.camp) + '">Van de lijn halen</button></div>';
   }
   if (d.type === 'campmsg') {
-    return '<h2>Bericht voor ' + esc(d.name) + '</h2><p class="small muted">Concept van de coach. Pas aan en verstuur het zelf.</p><div class="brief" id="campmsgOut" aria-live="polite">' + (d.text ? md(d.text) : '<p class="muted">Het bericht wordt gemaakt…</p>') + '</div><div class="row"><button class="btn" data-act="camp-msg-copy">Kopieer</button><button class="btn ghost" data-act="camp-msg-again" data-id="' + esc(d.id) + '">Ander concept</button><button class="btn ghost" data-act="overlay-close">Sluiten</button></div>';
+    return '<h2>Bericht voor ' + esc(d.name) + '</h2><p class="small muted">Concept van de coach. Pas aan en verstuur het zelf.</p><div class="brief" id="campmsgOut" aria-live="polite">' + (d.text ? md(d.text) : '<p class="muted">Het bericht wordt gemaakt…</p>') + '</div><div class="row"><button class="btn" data-act="camp-msg-copy">Kopieer</button><button class="btn ghost" data-act="camp-msg-std" data-id="' + esc(d.id) + '">Standaardtekst</button><button class="btn ghost" data-act="camp-msg-again" data-id="' + esc(d.id) + '">Ander concept</button><button class="btn ghost" data-act="overlay-close">Sluiten</button></div>';
   }
   return null;
 }
@@ -1248,6 +1248,7 @@ async function campAct(a, d, el) {
   }
   if (a === 'camp-person-del') { const doc = clone(campDoc(d.camp)); doc.people = doc.people.filter(x => x.id !== d.id); saveCamp(d.camp, doc); state.dialog = null; render(); return true; }
   if (a === 'camp-msg') { const c = campById(state.camp.id), p = campDoc(c.id).people.find(x => x.id === d.id); state.dialog = { type: 'campmsg', id: d.id, camp: c.id, name: p.name, text: '', busy: false }; render(); campMsgRun(); return true; }
+  if (a === 'camp-msg-std') { const dl = state.dialog; if (!dl || dl.type !== 'campmsg') return true; const c = campById(dl.camp), p = campDoc(dl.camp).people.find(x => x.id === dl.id); if (!c || !p) return true; const st = c.steps[campStepIdx(c, p)]; dl.text = campFirstStepMsg(c, p, { msg: campTpl(c, st) }) || st.hint || ''; const o = $('#campmsgOut'); if (o) o.innerHTML = md(dl.text); return true; }
   if (a === 'camp-msg-again') { campMsgRun(); return true; }
   if (a === 'camp-msg-copy') { if (state.dialog && state.dialog.text) copyText(state.dialog.text); return true; }
   return false;
