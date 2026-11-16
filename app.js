@@ -305,6 +305,7 @@ function aiErr(e) {
   if (code === 'not_granted') return 'Je hebt de coach nog geen toestemming gegeven. Probeer opnieuw en kies toestaan.';
   if (code === 'limit' && e.message) return e.message;
   if (code === 'auth') return 'Je bent uitgelogd. Log opnieuw in.';
+  if (e && e.detail) return 'De coach kon geen antwoord maken (' + e.detail + ').';
   if (code === 'rate_limited') return 'De coach heeft even rust nodig. Probeer het over een minuut opnieuw.';
   if (e && e.name === 'AbortError') return 'Gestopt.';
   return 'De coach kon geen antwoord maken. Probeer het opnieuw.';
