@@ -85,7 +85,7 @@ const admin = createClient(url, service);
 Deno.serve((req: Request) => handle(req, {
   env: { ANTHROPIC_API_KEY: Deno.env.get('ANTHROPIC_API_KEY'), ANTHROPIC_MODEL: Deno.env.get('ANTHROPIC_MODEL'), AI_MONTHLY_LIMIT: Deno.env.get('AI_MONTHLY_LIMIT'), AI_MAX_CHARS: Deno.env.get('AI_MAX_CHARS') },
   fetch: (u: string, o: RequestInit) => fetch(u, o),
-  getUser: async (r: Request) => { const { data } = await asUser(r).auth.getUser(); return data && data.user ? data.user : null; },
+  getUser: async (r: Request) => { const t = (r.headers.get('Authorization') || '').replace(/^Bearer\s+/i, ''); if (!t) return null; const { data } = await admin.auth.getUser(t); return data && data.user ? data.user : null; },
   isMember: async (r: Request) => { const { data } = await asUser(r).rpc('team_info'); return !!data; },
   aiUse: async (uid: string, limit: number) => { const { data, error } = await admin.rpc('ai_use', { p_user: uid, p_limit: limit }); return !error && data === true; },
 }));

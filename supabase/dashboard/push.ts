@@ -65,8 +65,8 @@ Deno.serve(async (req: Request) => {
     return J({ ok: true, sent });
   }
 
-  const auth = req.headers.get('Authorization') || '';
-  const { data } = await createClient(url, anon, { global: { headers: { Authorization: auth } } }).auth.getUser();
+  const tok = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+  const { data } = tok ? await admin.auth.getUser(tok) : { data: null };
   if (!data || !data.user) return J({ error: 'auth' }, 401);
   if (body.action === 'test') {
     const { data: subs } = await admin.from('push_subs').select('*').eq('user_id', data.user.id);
