@@ -64,6 +64,13 @@ Dit kan volledig in het Supabase-dashboard, zonder CLI.
 
 Meldingen komen elke ochtend op de gekozen tijd, alleen als er iemand is om op te volgen of iemand jarig is. Op een iPhone moet Lumo eerst op het beginscherm staan.
 
+## Centrale bibliotheek (voor alle teams)
+Jij als app-beheerder kunt teksten centraal zetten, zodat elk team ze automatisch ziet en er een eigen campagne van kan maken.
+1. SQL Editor: voer `supabase/global.sql` uit.
+2. Word app-beheerder: voer in de SQL Editor uit (met je eigen e-mailadres): `insert into public.app_admins select id from auth.users where email = 'JOUW-EMAIL';`
+3. Optioneel: voer `seed/library-central.sql` uit om de Young Living-teksten centraal te zetten.
+4. In Lumo (Team > Bibliotheek) kies je bij **Toevoegen** de plaatsing "Centraal (alle teams)". Items met het label "Centraal" kan alleen jij wijzigen. Teambeheerders kunnen er met **Maak campagne** een eigen campagne van maken.
+
 ## Hoe het werkt
 - **Teams:** wie een team maakt, is daar beheerder. Daarna kan die leden uitnodigen, beheerders benoemen en leden verwijderen. Een nieuwe klant maakt gewoon een eigen team aan. Binnen de app zien teams elkaar nooit en is er geen supergebruiker. Let op: als eigenaar van het Supabase-project kun jij technisch wel bij alle gegevens in de database. Zeg dat eerlijk in je privacyverklaring en gebruik dat nooit voor iets anders dan onderhoud.
 - **Wie ziet wat:** privé-gegevens (profiel, contacten, cijfers) ziet alleen het lid zelf, ook de beheerder niet. Bibliotheek, campagnes en dergelijke beheert de beheerder. Wat een lid "deelt met upline" ziet alleen de beheerder.

@@ -6,7 +6,7 @@
   var CFG = window.LUMO_CONFIG || {};
   var appEl = function () { return document.getElementById('app'); };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
-  var sb = null, session = null, info = null;
+  var sb = null, session = null, info = null, appAdmin = false;
 
   function nlError(e) {
     var m = String((e && (e.message || e.error_description)) || e || '');
@@ -103,7 +103,9 @@
       busy(false, mode === 'join' ? 'Deelnemen' : 'Team maken');
       if (r.error) { msg(nlError(r.error)); return; }
       try { localStorage.removeItem('lumo:invite'); } catch (e) { /* */ }
-      info = r.data; start();
+      info = r.data;
+    try { var ra = await sb.rpc('is_app_admin'); appAdmin = !ra.error && ra.data === true; } catch (e) { appAdmin = false; }
+    start();
     };
   }
 
@@ -116,9 +118,39 @@
     if (channel || !info) return;
     channel = sb.channel('lumo-docs-' + info.team_id).on('postgres_changes', { event: '*', schema: 'public', table: 'docs', filter: 'team_id=eq.' + info.team_id }, function (p) {
       var path = (p.new && p.new.path) || (p.old && p.old.path); if (path) notify(path);
+    }).on('postgres_changes', { event: '*', schema: 'public', table: 'global_docs' }, function (p) {
+      var path = (p.new && p.new.path) || (p.old && p.old.path); if (path) notify(path);
     }).subscribe();
   }
+  var GLOBAL = { glibrary: 1 };
+  function gcollection(path) {
+    function fetchAll() {
+      return sb.from('global_docs').select('id,data').eq('path', path).then(function (r) {
+        if (r.error) throw r.error;
+        return { docs: (r.data || []).map(function (d) { return { id: d.id, data: function () { return d.data; } }; }) };
+      });
+    }
+    return {
+      doc: function (id) {
+        return {
+          set: function (data) { return sb.from('global_docs').upsert({ path: path, id: String(id), data: data }, { onConflict: 'path,id' }).then(function (r) { if (r.error) throw r.error; }); },
+          delete: function () { return sb.from('global_docs').delete().eq('path', path).eq('id', String(id)).then(function (r) { if (r.error) throw r.error; }); }
+        };
+      },
+      onSnapshot: function (cb, errcb) {
+        var alive = true, timer = null, poll = null;
+        function run() { if (!alive) return; fetchAll().then(function (s) { if (alive) cb(s); }, function (e) { if (alive && errcb) errcb(e); }); }
+        function soon() { clearTimeout(timer); timer = setTimeout(run, 150); }
+        (listeners[path] = listeners[path] || []).push(soon); ensureChannel();
+        poll = setInterval(function () { if (document.visibilityState === 'visible') run(); }, 60000);
+        document.addEventListener('visibilitychange', soon);
+        run();
+        return function () { alive = false; clearInterval(poll); clearTimeout(timer); document.removeEventListener('visibilitychange', soon); listeners[path] = (listeners[path] || []).filter(function (f) { return f !== soon; }); };
+      }
+    };
+  }
   function collection(path) {
+    if (GLOBAL[path]) return gcollection(path);
     function fetchAll() {
       return sb.from('docs').select('id,data').eq('team_id', info.team_id).eq('path', path).then(function (r) {
         if (r.error) throw r.error;
@@ -189,7 +221,7 @@
     window.claude = { use: function (name) {
       return Promise.resolve(({
         db: { collection: collection },
-        user: { id: function () { return Promise.resolve(self); }, canEdit: function () { return info.role === 'admin'; } },
+        user: { id: function () { return Promise.resolve(self); }, canEdit: function () { return info.role === 'admin'; }, isAppAdmin: function () { return appAdmin; } },
         sample: sample,
         downloads: downloads()
       })[name] || null);

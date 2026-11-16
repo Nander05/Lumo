@@ -54,7 +54,8 @@ const SUGGEST = [
   { label: 'Nieuwe gesprekken', target: 3 }, { label: 'Opvolgingen', target: 5 },
   { label: 'Berichten naar teamleden', target: 3 }, { label: 'Moment voor mezelf', target: 1 }
 ];
-const SHARED = ['library', 'training', 'playbook', 'agenda', 'challenge', 'kudos', 'shares', 'help', 'board', 'mentors', 'campaigns', 'campshares'];
+const SHARED = ['library', 'glibrary', 'training', 'playbook', 'agenda', 'challenge', 'kudos', 'shares', 'help', 'board', 'mentors', 'campaigns', 'campshares'];
+const libAll = () => sh('library').concat(sh('glibrary').map(i => Object.assign({}, i, { central: true })));
 const LEADER_ONLY = ['shares', 'help', 'campshares'];
 const SUBS = {
   mensen: ['Pipeline', 'Klanten', 'Teamleden', 'Workshops'],
@@ -86,9 +87,9 @@ const store = {
       const [db, user, dl] = await Promise.all([wt(cl.use('db'), 12000), wt(cl.use('user'), 12000), wt(cl.use('downloads'), 12000)]);
       if (!db || !user) throw new Error('niet beschikbaar');
       this.id = await user.id(); this.db = db; this.col = db.collection('data/users/' + this.id);
-      this.isAdmin = typeof user.canEdit === 'function' ? !!user.canEdit() : false;
+      this.isAdmin = typeof user.canEdit === 'function' ? !!user.canEdit() : false; this.isOwner = typeof user.isAppAdmin === 'function' ? !!user.isAppAdmin() : false;
       this.canDownload = !!dl; this.dl = dl; this.mode = 'cloud';
-    } catch (e) { this.mode = 'local'; this.isAdmin = true; this.id = 'lokaal'; }
+    } catch (e) { this.mode = 'local'; this.isAdmin = true; this.isOwner = true; this.id = 'lokaal'; }
   },
   coll(n) { return this.cols[n] || (this.cols[n] = this.db.collection(n)); },
   norm(s) {
@@ -101,7 +102,7 @@ const store = {
   watchMine(cb) {
     if (this.mode === 'cloud') {
       let got = false;
-      const fb = () => { this.mode = 'local'; this.isAdmin = true; cb(this.lget('mine', []), true); };
+      const fb = () => { this.mode = 'local'; this.isAdmin = true; this.isOwner = true; cb(this.lget('mine', []), true); };
       const t = setTimeout(() => { if (!got) fb(); }, 10000);
       try { const u = this.col.onSnapshot(s => { got = true; clearTimeout(t); cb(this.norm(s)); }, () => { clearTimeout(t); fb(); }); if (typeof u === 'function') this.unsub.push(u); }
       catch (e) { clearTimeout(t); fb(); }
@@ -215,7 +216,7 @@ function upcoming(days) {
   workshops().forEach(e => { if (e.date >= t && e.date <= end) out.push({ date: e.date, text: 'Workshop: ' + e.title }); });
   return out.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8);
 }
-function newLibCount() { const seen = prefs().lastSeenLib || ''; return sh('library').filter(i => (i.updatedAt || '') > seen).length; }
+function newLibCount() { const seen = prefs().lastSeenLib || ''; return libAll().filter(i => (i.updatedAt || '') > seen).length; }
 function numOf(s) { const n = parseFloat(String(s || '').replace(/\./g, '').replace(',', '.').replace(/[^0-9.\-]/g, '')); return isNaN(n) ? null : n; }
 function conversion() {
   const p = byKind('Prospect'); if (p.length < 5) return null;
@@ -276,7 +277,7 @@ function demoShared() {
     ['Voorbeeld: voorwaarden van een actie', 'Voorwaarden', 'VOORBEELDTEKST, geen echte voorwaarden.\n\nHier komen de volledige voorwaarden van een actie: wie meedoet, de looptijd, uitzonderingen en bij wie je terechtkunt met vragen.'],
     ['Voorbeeld: productlijst', 'Producten', 'VOORBEELDTEKST.\n\n- Product A: korte omschrijving\n- Product B: korte omschrijving\n- Product C: korte omschrijving\n\nZet hier alleen feitelijke omschrijvingen uit de officiële materialen.'],
     ['Voorbeeld: begrippenlijst', 'Begrippen en lijsten', 'VOORBEELDTEKST.\n\nUpline: de persoon boven jou in de structuur.\nOpvolging: een volgend contactmoment met iemand die interesse had.\nStartpakket: het pakket waarmee een nieuw lid begint.']];
-  const d = { library: [], training: [], playbook: [], agenda: [], challenge: [], kudos: [], shares: [], help: [], board: [], mentors: [], campaigns: [], campshares: [] };
+  const d = { library: [], glibrary: [], training: [], playbook: [], agenda: [], challenge: [], kudos: [], shares: [], help: [], board: [], mentors: [], campaigns: [], campshares: [] };
   L.forEach((x, i) => d.library.push({ id: 'demo-lib' + i, title: x[0], category: x[1], text: x[2], updatedAt: now, note: i === 0 ? 'Voorbeeld van een wijzigingsnotitie: looptijd verlengd.' : '', prevText: i === 0 ? 'Eerdere versie: looptijd tot einde van de maand.' : '' }));
   d.training.push({ id: 'demo-tr0', title: 'Voorbeeld: eerste gesprek zonder druk', desc: 'Korte training over luisteren, vragen stellen en niets forceren.', url: '', category: 'Gesprekken', quiz: [{ q: 'Wat doe je als iemand "nee" zegt?', a: ['Bedank vriendelijk en laat de deur open', 'Probeer het nog twee keer', 'Stuur extra productinfo'], c: 0 }, { q: 'Wat is het doel van een eerste gesprek?', a: ['Kennismaken en luisteren', 'Zoveel mogelijk verkopen', 'Alle producten uitleggen'], c: 0 }] });
   [[1, 'Welkom en eerste afspraak', 'Plan een kennismaking met je upline en bekijk samen je doelen.'], [3, 'Je persoonlijke startlijst', 'Maak een lijst van vijf mensen met wie je als eerste wilt praten.'], [7, 'Eerste gesprek voeren', 'Gebruik het script uit de coach en oefen het eerst met een rollenspel.'], [14, 'Eerste opvolging', 'Neem contact op met iedereen die interesse toonde.'], [30, 'Terugblik op je eerste maand', 'Bespreek met je upline wat werkte en wat je anders wilt.']]
@@ -329,7 +330,7 @@ function buildContext() {
   if (f) fig = (f.headers.join(' | ') + '\n' + f.rows.slice(0, 30).map(r => r.join(' | ')).join('\n')).slice(0, 3000);
   const up = upcoming(10).map(u => '- ' + u.date + ': ' + u.text).join('\n') || '(niets gepland)';
   let lib = '', budget = 12000;
-  for (const i of sh('library')) { const t = '## ' + i.title + ' (' + i.category + ')\n' + i.text + '\n\n'; if (t.length > budget) { lib += t.slice(0, budget); break; } lib += t; budget -= t.length; }
+  for (const i of libAll()) { const t = '## ' + i.title + ' (' + i.category + ')\n' + i.text + '\n\n'; if (t.length > budget) { lib += t.slice(0, budget); break; } lib += t; budget -= t.length; }
   return 'INSTRUCTIES\n- ' + rulesText() + '\n\nVANDAAG: ' + new Date().toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) +
     '\n\nLID\nNaam: ' + p.name + '\nDoel: ' + (p.goal || '-') + '\nWaarom: ' + (p.why || '-') + '\nDagdoelen vandaag: ' + goals + '\nReeks: ' + streak() + ' dagen; score laatste 7 dagen: ' + score7() + '%' +
     (p.voice ? '\nSchrijfstijl van het lid (voorbeeld): ' + p.voice.slice(0, 700) : '') +
@@ -524,20 +525,20 @@ function flagText(t) {
 /* ---------- Team ---------- */
 function libList(items) {
   const seen = prefs().lastSeenLib || '';
-  if (!items.length) return '<div class="card soft"><p>' + (sh('library').length ? 'Niets gevonden voor deze zoekopdracht.' : (store.isAdmin ? 'De bibliotheek is nog leeg. Voeg de eerste voorwaarden, promotie of lijst toe.' : 'De bibliotheek is nog leeg. De beheerder voegt hier informatie toe.')) + '</p></div>';
-  return items.map(i => '<details class="item"><summary>' + pill(i.category || 'Overig') + '<b style="flex:1">' + esc(i.title) + '</b>' + ((i.updatedAt || '') > seen ? pill('Nieuw', 'due') : '') + '</summary><div class="body">' + esc(i.text) +
+  if (!items.length) return '<div class="card soft"><p>' + (libAll().length ? 'Niets gevonden voor deze zoekopdracht.' : (store.isAdmin ? 'De bibliotheek is nog leeg. Voeg de eerste voorwaarden, promotie of lijst toe.' : 'De bibliotheek is nog leeg. De beheerder voegt hier informatie toe.')) + '</p></div>';
+  return items.map(i => '<details class="item"><summary>' + pill(i.category || 'Overig') + '<b style="flex:1">' + esc(i.title) + '</b>' + (i.central ? pill('Centraal') : '') + ((i.updatedAt || '') > seen ? pill('Nieuw', 'due') : '') + '</summary><div class="body">' + esc(i.text) +
     (i.note ? '<p class="small" style="margin-top:12px"><b>Wat is er veranderd:</b> ' + esc(i.note) + '</p>' : '') +
     '<p class="small muted" style="margin-top:12px">Bijgewerkt op ' + esc(i.updatedAt ? new Date(i.updatedAt).toLocaleDateString('nl-NL') : '—') + '</p>' +
-    (store.isAdmin ? '<div class="row" style="margin-top:8px"><button class="btn ghost small" data-act="lib-edit" data-id="' + esc(i.id) + '">Bewerk</button></div>' : '') + '</div></details>').join('');
+    '<div class="row" style="margin-top:8px">' + ((i.central ? store.isOwner : store.isAdmin) ? '<button class="btn ghost small" data-act="lib-edit" data-id="' + esc(i.id) + '">Bewerk</button>' : '') + (store.isAdmin ? '<button class="btn ghost small" data-act="lib-camp" data-id="' + esc(i.id) + '">Maak campagne</button>' : '') + '</div>' + '</div></details>').join('');
 }
 function viewTeam() {
   const sub = state.sub.team, t = todayKey(), pr = prefs(), me = meId(); let body = '';
   const adminBtn = (act, label) => store.isAdmin ? '<button class="btn" data-act="' + act + '">' + label + '</button>' : '';
   if (sub === 'Bibliotheek') {
     const q = state.libSearch.toLowerCase(), cat = state.libCat;
-    const items = sh('library').filter(i => (cat === 'Alles' || i.category === cat) && (!q || (i.title + ' ' + i.text).toLowerCase().includes(q))).sort((a, b) => (a.category || '').localeCompare(b.category || '') || (a.title || '').localeCompare(b.title || ''));
-    const changed = sh('library').filter(i => (i.updatedAt || '') > (pr.lastSeenLib || '') && (i.prevText || i.note));
-    body = '<div class="row"><span class="spacer"></span>' + adminBtn('lib-new', 'Toevoegen') + '</div>' +
+    const items = libAll().filter(i => (cat === 'Alles' || i.category === cat) && (!q || (i.title + ' ' + i.text).toLowerCase().includes(q))).sort((a, b) => (a.category || '').localeCompare(b.category || '') || (a.title || '').localeCompare(b.title || ''));
+    const changed = libAll().filter(i => (i.updatedAt || '') > (pr.lastSeenLib || '') && (i.prevText || i.note));
+    body = '<div class="row"><span class="spacer"></span>' + (store.isAdmin || store.isOwner ? '<button class="btn" data-act="lib-new">Toevoegen</button>' : '') + '</div>' +
       '<p class="small muted">Gedeelde informatie: voorwaarden van acties, promoties, productlijsten en begrippen. De coach gebruikt dit als bron.</p>' +
       (changed.length ? '<div class="row">' + coachBtn('Vat de wijzigingen samen', 'Vat samen wat er is veranderd in de bibliotheek. Dit zijn de gewijzigde teksten met hun vorige versie of wijzigingsnotitie:\n' + changed.map(i => '## ' + i.title + '\nNu: ' + i.text.slice(0, 600) + '\nVorige versie: ' + (i.prevText || '-').slice(0, 600) + '\nNotitie: ' + (i.note || '-')).join('\n\n') + '\nGeef per tekst één zin: wat is anders en wat betekent dat voor mij.', 'btn') + '</div>' : '') +
       '<label class="f"><span class="sr">Zoeken in de bibliotheek</span><input type="search" id="libq" data-input="libsearch" placeholder="Zoeken…" value="' + esc(state.libSearch) + '"></label>' +
@@ -726,10 +727,10 @@ function overlayHTML() {
   }
   if (d.type === 'content') inner = '<h2>Idee toevoegen</h2>' + dateField('k-date', 'Datum', todayKey()) + '<label class="f" for="k-type">Soort<select id="k-type">' + optList(CT_TYPES, 'Instagram-post') + '</select></label>' + field('k-idea', 'Idee', '', 'data-autofocus') + btns('content-save', 'new', '');
   if (d.type === 'lib') {
-    const it = isNew ? { category: CATS[0] } : sh('library').find(x => x.id === d.id) || {};
+    const it = isNew ? { category: CATS[0] } : libAll().find(x => x.id === d.id) || {};
     inner = '<h2>' + (isNew ? 'Toevoegen aan de bibliotheek' : 'Bewerken') + '</h2>' + field('l-title', 'Titel', it.title, 'data-autofocus') + '<label class="f" for="l-cat">Categorie<select id="l-cat">' + optList(CATS, it.category) + '</select></label>' +
       areaField('l-text', 'Tekst', it.text, 'Plak de tekst of laad een tekstbestand. Heb je een PDF? Kopieer de tekst eruit.', true) +
-      '<div><label class="btn ghost small" for="libfile" style="cursor:pointer">Bestand laden</label><input id="libfile" class="sr" type="file" accept=".txt,.md,.csv,text/plain" data-change="lib-file"></div>' + field('l-note', 'Wat is er veranderd? (optioneel)', it.note) + btns('lib-save', d.id, 'lib-del');
+      '<div><label class="btn ghost small" for="libfile" style="cursor:pointer">Bestand laden</label><input id="libfile" class="sr" type="file" accept=".txt,.md,.csv,text/plain" data-change="lib-file"></div>' + field('l-note', 'Wat is er veranderd? (optioneel)', it.note) + (isNew && store.isOwner ? '<label class="f" for="l-scope">Waar plaatsen?<select id="l-scope"><option value="team">Alleen mijn team</option><option value="central">Centraal (alle teams)</option></select></label>' : '') + (it.central ? '<p class="small muted">Centraal item: wijzigingen zie je direct in alle teams.</p>' : '') + btns('lib-save', d.id, 'lib-del');
   }
   if (d.type === 'train') {
     const it = isNew ? {} : sh('training').find(x => x.id === d.id) || {};
@@ -984,7 +985,7 @@ function campOverview(c) {
 function campDialog(d) {
   const btnRow = (save, id, del) => '<div class="row"><button class="btn" data-act="' + save + '" data-id="' + esc(id) + '">Opslaan</button><button class="btn ghost" data-act="overlay-close">Annuleer</button><span class="spacer"></span>' + (del ? '<button class="btn danger" data-act="' + del + '" data-id="' + esc(id) + '">Verwijder</button>' : '') + '</div>';
   if (d.type === 'campedit') {
-    const x = d.draft || {}, isNew = d.id === 'new', libs = sh('library'), k = campKind(x);
+    const x = d.draft || {}, isNew = d.id === 'new', libs = libAll(), k = campKind(x);
     const stepsText = (x.steps || []).map(s => [s.label, s.hint || '', s.msg || ''].join(' | ')).join('\n');
     const ptsText = (x.pointTypes || []).map(t => [t.label, t.hint || '', t.pts || 1].join(' | ')).join('\n');
     const tasksText = (x.tasks || []).map(t => [t.label, t.hint || '', t.due || ''].join(' | ')).join('\n');
@@ -1067,7 +1068,7 @@ function campMsgSettings() {
 
 /* ---------- AI: voorstel en berichten ---------- */
 async function campPropose(libId) {
-  const it = sh('library').find(x => x.id === libId); if (!it) throw { code: 'nolib' };
+  const it = libAll().find(x => x.id === libId); if (!it) throw { code: 'nolib' };
   const msgRule = 'conceptbericht aan de ontvanger met {naam}, vriendelijk, zonder druk, zonder inkomstenbeloften en zonder gezondheidsclaims';
   const prompt = 'Maak een campagnevoorstel voor een Young Living-actie, alleen op basis van de onderstaande voorwaardentekst. Verzin niets: staat een datum, drempel, doel of beloning er niet, laat het veld leeg.\n\nTEKST: ' + it.title + '\n' + it.text.slice(0, 9000) +
     '\n\nKies eerst het TYPE dat echt bij deze actie past:\n- "line": de actie draait om andere mensen (klanten of teamleden) die je elk langs stappen begeleidt, bijvoorbeeld mensen die een mail kregen en een bestelling moeten plaatsen.\n- "points": de actie draait om punten of aantallen die je zelf verzamelt, per maand of in totaal (bijvoorbeeld een puntenspel waarin je prijzen wint).\n- "checklist": de actie vraagt een vaste reeks taken of mijlpalen van jezelf, eventueel met data.\n- "info": alleen informatie, er valt niets bij te houden.\n\nGeef uitsluitend JSON. Altijd: {"kind": "line"|"points"|"checklist"|"info", "title": korte naam, "summary": twee zinnen voor leden, geen inkomstenbeloften, "rules": een regel per punt met de belangrijkste voorwaarden (regels gescheiden door \\n, begin elke regel met "- "), "start": "jjjj-mm-dd" of "", "end": "jjjj-mm-dd" of ""}.\nBij "line" extra: "threshold": {"pv": getal, "label": "PV"} of null, "audience": een zin: welke mensen komen op de lijn, "criteria": een regel per toetsbare voorwaarde per persoon met de kolom die daarvoor nodig is, "steps": 4 tot 7 stappen {"label": korte naam, "hint": een zin wat het lid nu doet, "msg": ' + msgRule + '; leeg bij de laatste stap}. De eerste stap is het begin van de lijn en de laatste betekent klaar of beloning ontvangen.\nBij "points" extra: "period": "month" of "total", "goal": getal of null (alleen als de tekst een doel noemt), "pointTypes": een lijst {"label": naam, "hint": een zin wat er voor nodig is, "pts": getal punten}, één per manier om punten te verdienen, precies zoals in de tekst, "steps": 2 tot 4 voorbeeldberichten {"label","hint","msg": ' + msgRule + '} voor mensen die je uitnodigt of helpt.\nBij "checklist" extra: "tasks": {"label","hint","due": "jjjj-mm-dd" of ""}, "steps": 0 tot 3 voorbeeldberichten.\nBij "info" extra: "steps": 0 tot 3 voorbeeldberichten.';
@@ -1453,15 +1454,16 @@ async function onAct(a, el, ev) {
   if (a === 'rank-save') { setPrefs({ rank: { name: val('rk-name'), col: parseInt(val('rk-col'), 10) || 0, target: val('rk-target'), deadline: val('rk-dead'), newTarget: val('rk-new') } }); render(); toast('Opgeslagen.'); return; }
   /* bibliotheek en training */
   if (a === 'lib-cat') { state.libCat = d.cat; render(); return; }
+  if (a === 'lib-camp') { const it = libAll().find(x => x.id === d.id); if (!it) return; state.view = 'team'; state.sub.team = 'Campagnes'; state.dialog = { type: 'campedit', id: 'new', draft: { status: 'draft', steps: [], threshold: null, libId: it.id, title: it.title } }; state.focusNext = false; render(); return; }
   if (a === 'lib-new') { state.dialog = { type: 'lib', id: 'new' }; state.focusNext = true; render(); return; }
   if (a === 'lib-edit') { state.dialog = { type: 'lib', id: d.id }; state.focusNext = true; render(); return; }
   if (a === 'lib-save') {
     const title = val('l-title').trim(), text = val('l-text').trim(); if (!title || !text) { toast('Vul een titel en tekst in.'); return; }
-    const old = sh('library').find(x => x.id === d.id) || {}, id = d.id === 'new' ? uid('lib') : d.id;
+    const old = libAll().find(x => x.id === d.id) || {}, central = d.id === 'new' ? val('l-scope') === 'central' : !!old.central, id = d.id === 'new' ? uid(central ? 'clib' : 'lib') : d.id;
     const item = { title, category: val('l-cat'), text, note: val('l-note').trim(), prevText: old.text && old.text !== text ? old.text : (old.prevText || ''), updatedAt: new Date().toISOString() };
-    if (await putShared('library', id, item)) { if (store.mode === 'local') { /* lokale watcher werkt bij */ } state.dialog = null; render(); } return;
+    if (await putShared(central ? 'glibrary' : 'library', id, item)) { if (store.mode === 'local') { /* lokale watcher werkt bij */ } state.dialog = null; render(); } return;
   }
-  if (a === 'lib-del') { if (await dropShared('library', d.id)) { state.dialog = null; render(); } return; }
+  if (a === 'lib-del') { const dl = libAll().find(x => x.id === d.id); if (await dropShared(dl && dl.central ? 'glibrary' : 'library', d.id)) { state.dialog = null; render(); } return; }
   if (a === 'train-new') { state.dialog = { type: 'train', id: 'new' }; state.focusNext = true; render(); return; }
   if (a === 'train-edit') { state.dialog = { type: 'train', id: d.id }; state.focusNext = true; render(); return; }
   if (a === 'train-save') {
@@ -1582,7 +1584,7 @@ document.addEventListener('input', e => {
   if (el.dataset && el.dataset.input === 'campsearch') { state.camp.q = el.value; state.camp.limit = 30; const c = campById(state.camp.id), box = $('#camplist'); if (c && box) box.innerHTML = campBody(c); return; }
   if (el.dataset && el.dataset.input === 'libsearch') {
     state.libSearch = el.value; const q = state.libSearch.toLowerCase(), cat = state.libCat;
-    $('#liblist').innerHTML = libList(sh('library').filter(i => (cat === 'Alles' || i.category === cat) && (!q || (i.title + ' ' + i.text).toLowerCase().includes(q))));
+    $('#liblist').innerHTML = libList(libAll().filter(i => (cat === 'Alles' || i.category === cat) && (!q || (i.title + ' ' + i.text).toLowerCase().includes(q))));
   }
   if (el.id === 'coachInput') { el.style.height = 'auto'; el.style.height = Math.min(140, el.scrollHeight) + 'px'; }
 });
