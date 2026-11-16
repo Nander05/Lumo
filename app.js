@@ -157,11 +157,21 @@ const dayDoc = key => state.docs['day-' + key] || { counts: {} };
 
 function save(id, data) {
   state.docs[id] = data;
-  store.setMine(id, data).catch(() => toast('Opslaan is mislukt. Probeer het opnieuw.'));
+  const rec = pendMark(id, data);
+  store.setMine(id, data).then(() => { rec.done = Date.now(); }, () => { rec.done = Date.now(); toast('Opslaan is mislukt. Probeer het opnieuw.'); });
+}
+/* eigen wijzigingen die nog onderweg zijn: een oudere ophaalronde mag ze niet terugdraaien */
+const PEND = {};
+function pendMark(id, data) { const rec = { data, del: data === null, done: 0, t: Date.now() }; PEND[id] = rec; return rec; }
+function pendApply(docs) {
+  const now = Date.now();
+  Object.keys(PEND).forEach(id => { const r = PEND[id]; if ((r.done && now - r.done > 5000) || now - r.t > 60000) { delete PEND[id]; return; } if (r.del) delete docs[id]; else docs[id] = r.data; });
+  return docs;
 }
 function remove(id) {
   delete state.docs[id];
-  store.delMine(id).catch(() => toast('Verwijderen is mislukt. Probeer het opnieuw.'));
+  const rec = pendMark(id, null);
+  store.delMine(id).then(() => { rec.done = Date.now(); }, () => { rec.done = Date.now(); toast('Verwijderen is mislukt. Probeer het opnieuw.'); });
 }
 function setPrefs(patch) { save('prefs', Object.assign({}, prefs(), patch)); }
 async function putShared(name, id, data) {
@@ -1637,7 +1647,7 @@ document.addEventListener('focusout', () => { setTimeout(() => { if (state.pendi
   let first = true;
   store.watchMine((list, fellBack) => {
     const docs = {}; list.forEach(d => { const id = d.id, c = Object.assign({}, d); delete c.id; docs[id] = c; });
-    state.docs = docs; state.ready = true;
+    state.docs = pendApply(docs); state.ready = true;
     if (first) { first = false; render(); if (fellBack) toast('Opslag niet bereikbaar: lokale modus.'); } else softRender();
   });
   SHARED.forEach(n => store.watchShared(n, list => {
