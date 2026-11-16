@@ -1262,7 +1262,23 @@ function webTeamCard() {
       '<div class="row"><button class="btn" data-act="web-copy-invite">Kopieer link</button><button class="btn ghost" data-act="web-new-code">Nieuwe code</button></div>' +
       '<h3>Leden (' + (i.members || []).length + ')</h3>' + (i.members || []).map(m => '<div class="row"><span><b>' + esc(m.name || 'Naamloos') + '</b> ' + pill(m.role === 'admin' ? 'Beheerder' : 'Lid') + '</span><span class="spacer"></span>' +
         (m.user_id === me ? '<span class="small muted">jij</span>' : '<button class="btn ghost small" data-act="web-role" data-id="' + esc(m.user_id) + '" data-r="' + (m.role === 'admin' ? 'member' : 'admin') + '">' + (m.role === 'admin' ? 'Maak lid' : 'Maak beheerder') + '</button><button class="btn ghost small" data-act="web-remove" data-id="' + esc(m.user_id) + '">Verwijder</button>') + '</div>').join('') : '') +
-    '<div class="row"><button class="btn ghost" data-act="web-signout">Uitloggen</button><span class="spacer"></span><button class="btn danger" data-act="web-delete">Account verwijderen</button></div></section>';
+    '<div class="row"><button class="btn ghost" data-act="web-signout">Uitloggen</button><span class="spacer"></span><button class="btn danger" data-act="web-delete">Account verwijderen</button></div></section>' + webPushCard();
+}
+
+let webPushSt = null, webPushLoading = false;
+function webPushLoad(force) {
+  const W = window.__lumoWeb; if (!W || !W.push || webPushLoading || (webPushSt && !force)) return;
+  webPushLoading = true;
+  W.push.status().then(s => { webPushSt = s; }).catch(() => { webPushSt = { supported: false }; }).then(() => { webPushLoading = false; render(); });
+}
+function webPushCard() {
+  webPushLoad();
+  const st = webPushSt; let inner;
+  if (!st) inner = '<p class="small muted">Even kijken…</p>';
+  else if (!st.supported) inner = '<p class="small muted">' + (st.needsInstall ? 'Op een iPhone werken meldingen pas als Lumo op je beginscherm staat: tik op Delen en dan op "Zet op beginscherm", open Lumo van daaruit en kom hier terug.' : 'Meldingen worden op dit toestel of in deze browser niet ondersteund.') + '</p>';
+  else if (!st.on) inner = '<p class="small muted">Krijg elke ochtend een melding met wie je moet opvolgen en wie er jarig is.</p>' + (st.permission === 'denied' ? '<p class="small" style="color:var(--danger)">Meldingen zijn geblokkeerd voor deze site. Sta ze toe in de instellingen van je browser of telefoon.</p>' : '') + '<div class="row"><button class="btn" data-act="web-push-on">Meldingen aanzetten</button></div>';
+  else inner = '<p class="small muted">Meldingen staan aan op dit toestel.</p><label class="f" for="push-hour">Tijd van de ochtendmelding<select id="push-hour" data-change="web-push-hour">' + [6, 7, 8, 9, 10, 12, 18, 20].map(h => '<option value="' + h + '"' + (st.hour === h ? ' selected' : '') + '>' + (h < 10 ? '0' : '') + h + ':00</option>').join('') + '</select></label><div class="row"><button class="btn ghost" data-act="web-push-test">Stuur testmelding</button><button class="btn ghost" data-act="web-push-off">Uitzetten</button></div>';
+  return '<section class="card" aria-labelledby="h-push"><h2 id="h-push">Meldingen</h2>' + inner + '</section>';
 }
 async function webAct(a, d) {
   const W = window.__lumoWeb, i = webInfo(); if (!W) return false;
@@ -1271,6 +1287,9 @@ async function webAct(a, d) {
   if (a === 'web-new-code') { if (confirm('Nieuwe code maken? De oude uitnodigingslink werkt dan niet meer.')) await run(() => W.regenerate(), 'Nieuwe uitnodigingslink gemaakt.'); return true; }
   if (a === 'web-role') { await run(() => W.setRole(d.id, d.r), d.r === 'admin' ? 'Dit lid is nu beheerder.' : 'Dit lid is nu gewoon lid.'); return true; }
   if (a === 'web-remove') { if (confirm('Dit lid uit het team halen? De gegevens van dit lid in Lumo worden gewist.')) await run(() => W.removeMember(d.id), 'Lid verwijderd.'); return true; }
+  if (a === 'web-push-on') { try { await W.push.enable(8); webPushSt = null; webPushLoad(true); toast('Meldingen staan aan.'); } catch (e) { toast((e && e.message) || 'Dat lukte niet.'); } return true; }
+  if (a === 'web-push-off') { try { await W.push.disable(); webPushSt = null; webPushLoad(true); toast('Meldingen staan uit.'); } catch (e) { toast((e && e.message) || 'Dat lukte niet.'); } return true; }
+  if (a === 'web-push-test') { try { await W.push.test(); toast('Testmelding verstuurd.'); } catch (e) { toast((e && e.message) || 'Dat lukte niet.'); } return true; }
   if (a === 'web-signout') { await W.signOut(); return true; }
   if (a === 'web-delete') { if (confirm('Je account en al je gegevens definitief verwijderen? Dit kan niet ongedaan worden gemaakt.')) { try { await W.deleteAccount(); } catch (e) { toast((e && e.message) || 'Dat lukte niet.'); } } return true; }
   return false;
@@ -1528,6 +1547,7 @@ document.addEventListener('change', async e => {
   if (k === 'role') { const r = window.__roles[parseInt(el.value, 10)]; if (r) { state.view = 'coach'; render(); coachSend('Speel een rollenspel met me. Jij bent ' + r[1] + '. Ik ben een wellness-ondernemer die een gesprek voert. Blijf in je rol en reageer kort, zoals een echt mens. Begin met een openingszin. Als ik "stop" typ, geef je feedback: wat ging goed, wat kan beter en één tip.'); } }
   if (k === 'script') { const s = window.__scripts[parseInt(el.value, 10)]; if (s) { state.view = 'coach'; render(); coachSend('Schrijf ' + s[1] + '. Geef twee varianten (kort en iets uitgebreider), zonder druk en zonder claims.'); } }
   if (k === 'follow') { const c = state.docs[el.value]; if (c) { state.view = 'coach'; render(); coachSend('Schrijf een kort bericht voor ' + c.name + ' (' + (c.kind || 'Prospect') + ', fase ' + c.stage + (c.note ? ', notitie: ' + c.note : '') + '). Geef één concept dat ik zelf kan versturen.'); } }
+  if (k === 'web-push-hour') { try { await window.__lumoWeb.push.setHour(parseInt(el.value, 10)); webPushSt = null; webPushLoad(true); toast('Tijd opgeslagen.'); } catch (e) { toast('Dat lukte niet.'); } return; }
   if (k === 'camp-kind') { const dlg = state.dialog; if (dlg && dlg.type === 'campedit') { dlg.draft = campReadDraft(dlg); dlg.draft.kind = el.value; render(); } return; }
   if (k === 'camp-task') { const id = state.camp.id, doc = clone(campDoc(id)); doc.tasks = doc.tasks || {}; if (el.checked) doc.tasks[el.dataset.id] = new Date().toISOString(); else delete doc.tasks[el.dataset.id]; saveCamp(id, doc); render(); return; }
   if (k === 'camp-share') { const id = el.dataset.id, doc = clone(campDoc(id)); doc.share = el.value; save('camp-' + id, doc); render(); toast(el.value === 'off' ? 'Je deelt niets meer voor deze campagne.' : 'Gedeeld met je upline.'); return; }

@@ -45,6 +45,25 @@ Lumo als gewone webapp: iedereen krijgt een link en een eigen inlog, zonder Clau
 3. Wil je de Young Living-teksten in de bibliotheek? Open `seed/library.sql`, controleer dat de teamnaam bovenaan klopt, plak het in de SQL Editor en klik **Run**.
 4. Zet eerst een privacyverklaring klaar (`privacy.html`), voordat anderen een account maken.
 
+## AI en meldingen zetten (zonder terminal)
+
+Dit kan volledig in het Supabase-dashboard, zonder CLI.
+
+### De AI-functie
+1. Ga naar **Edge Functions > Deploy a new function > Via Editor**. Noem hem exact `ai`.
+2. Plak de inhoud van `supabase/dashboard/ai.ts` en klik **Deploy**.
+3. Open de functie, ga naar **Details** en zet **Verify JWT** uit (de functie controleert de gebruiker zelf).
+4. Ga naar **Edge Functions > Secrets** (of **Project Settings > Edge Functions**) en voeg toe: `ANTHROPIC_API_KEY` (je Anthropic-sleutel) en eventueel `AI_MONTHLY_LIMIT` (bijvoorbeeld 300).
+
+### Pushmeldingen
+1. SQL Editor: voer `supabase/push.sql` uit.
+2. Edge Functions: maak op dezelfde manier een functie `push` met de inhoud van `supabase/dashboard/push.ts`, en zet **Verify JWT** uit.
+3. Voeg bij Secrets toe: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` en `PUSH_CRON_SECRET`. De waarden staan in `supabase/.env` op je eigen computer (niet in GitHub). De publieke sleutel staat al in `config.js`.
+4. SQL Editor: voer `supabase/cron.local.sql` uit. Dat is `cron.sql` met jouw geheim erin. Daarmee roept Supabase elk uur de functie aan.
+5. In Lumo: **Instellingen > Meldingen > Meldingen aanzetten**, en kies **Stuur testmelding**.
+
+Meldingen komen elke ochtend op de gekozen tijd, alleen als er iemand is om op te volgen of iemand jarig is. Op een iPhone moet Lumo eerst op het beginscherm staan.
+
 ## Hoe het werkt
 - **Teams:** wie een team maakt, is daar beheerder. Daarna kan die leden uitnodigen, beheerders benoemen en leden verwijderen. Een nieuwe klant maakt gewoon een eigen team aan. Binnen de app zien teams elkaar nooit en is er geen supergebruiker. Let op: als eigenaar van het Supabase-project kun jij technisch wel bij alle gegevens in de database. Zeg dat eerlijk in je privacyverklaring en gebruik dat nooit voor iets anders dan onderhoud.
 - **Wie ziet wat:** privé-gegevens (profiel, contacten, cijfers) ziet alleen het lid zelf, ook de beheerder niet. Bibliotheek, campagnes en dergelijke beheert de beheerder. Wat een lid "deelt met upline" ziet alleen de beheerder.
@@ -57,7 +76,7 @@ Lumo als gewone webapp: iedereen krijgt een link en een eigen inlog, zonder Clau
 - AI: per gebruik. Met 20 actieve leden ongeveer 15 tot 60 euro per maand, afhankelijk van het model en het gebruik. Met `AI_MONTHLY_LIMIT` en het uitgavenlimiet bij Anthropic kan het nooit uit de hand lopen.
 
 ## Wat er nog niet in zit
-- Pushmeldingen en de koppeling met het Virtual Office (die blijven "voorbeeld"; plakken en CSV werken wel).
+- De koppeling met het Virtual Office (die blijven "voorbeeld"; plakken en CSV werken wel).
 - Mailen van uitnodigingen vanuit de app (je deelt de link zelf).
 - Betalen of abonnementen voor crossline-klanten.
 - Een versie in de App Store en Play Store (de PWA is installeerbaar zonder store).

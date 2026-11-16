@@ -200,6 +200,41 @@
       regenerate: async function () { var r = await sb.rpc('regenerate_invite'); if (r.error) throw r.error; },
       setRole: async function (uid, role) { var r = await sb.rpc('set_member_role', { p_user: uid, p_role: role }); if (r.error) throw r.error; },
       removeMember: async function (uid) { var r = await sb.rpc('remove_member', { p_user: uid }); if (r.error) throw r.error; },
+      push: (function () {
+        function b64(k) { var p = '='.repeat((4 - k.length % 4) % 4), r = (k + p).replace(/-/g, '+').replace(/_/g, '/'), raw = atob(r), o = new Uint8Array(raw.length); for (var i = 0; i < raw.length; i++) o[i] = raw.charCodeAt(i); return o; }
+        var ios = /iphone|ipad|ipod/i.test(navigator.userAgent), standalone = window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+        return {
+          status: async function () {
+            var ok = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && !!CFG.vapidPublicKey;
+            if (!ok) return { supported: false, needsInstall: ios && !standalone };
+            if (ios && !standalone) return { supported: false, needsInstall: true };
+            var reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription(), hour = 8;
+            if (sub) { var r = await sb.from('push_subs').select('hour').eq('endpoint', sub.endpoint).maybeSingle(); if (r.data) hour = r.data.hour; else sub = null; }
+            return { supported: true, permission: Notification.permission, on: !!sub, hour: hour };
+          },
+          enable: async function (hour) {
+            var perm = await Notification.requestPermission(); if (perm !== 'granted') throw { message: 'Meldingen zijn geblokkeerd. Sta ze toe in de instellingen van je browser of telefoon.' };
+            var reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
+            if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(CFG.vapidPublicKey) });
+            var j = sub.toJSON(), tz = 'Europe/Brussels'; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || tz; } catch (e) { /* */ }
+            var r = await sb.from('push_subs').upsert({ user_id: self, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, tz: tz, hour: hour || 8 }, { onConflict: 'endpoint' });
+            if (r.error) throw r.error;
+          },
+          disable: async function () {
+            var reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
+            if (sub) { await sb.from('push_subs').delete().eq('endpoint', sub.endpoint); await sub.unsubscribe(); }
+          },
+          setHour: async function (h) {
+            var reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription(); if (!sub) return;
+            var r = await sb.from('push_subs').update({ hour: h, last_sent: null }).eq('endpoint', sub.endpoint); if (r.error) throw r.error;
+          },
+          test: async function () {
+            var res = await fetch(CFG.supabaseUrl + '/functions/v1/push', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (await token()), apikey: CFG.supabaseAnonKey }, body: JSON.stringify({ action: 'test' }) });
+            if (!res.ok) throw { message: 'De meldingsfunctie reageert niet (' + res.status + '). Staat hij op Supabase?' };
+            var j = await res.json(); if (!j.sent) throw { message: 'Geen toestel gevonden om naar te sturen.' };
+          }
+        };
+      })(),
       signOut: signOut,
       deleteAccount: async function () { var r = await sb.rpc('delete_me'); if (r.error) throw r.error; try { await sb.auth.signOut(); } catch (e) { /* */ } try { localStorage.clear(); } catch (e) { /* */ } location.replace(location.pathname); }
     };
