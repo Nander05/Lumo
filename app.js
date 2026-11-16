@@ -895,7 +895,7 @@ function campCards(c) {
     const i = campStepIdx(c, p), st = steps[i], pct = th ? Math.min(100, Math.round((Number(p.pv) || 0) / th.pv * 100)) : 0, stale = campStale(c, p), no = p.check && p.check.status === 'no';
     return '<div class="contact"><div class="row"><b>' + esc(p.name) + '</b>' + (p.contactId && state.docs[p.contactId] ? pill('In je contacten') : '') + (no ? pill('Voldoet mogelijk niet', 'due') : '') + (stale ? pill('Opvolgen', 'due') : '') + '<span class="spacer"></span><span class="small muted">' + esc(st ? st.label : '') + '</span></div>' +
       (no ? '<p class="small"><b>Let op:</b> ' + esc(p.check.why || 'Voldoet mogelijk niet aan de voorwaarden.') + ' Controleer dit in het Virtual Office.</p>' : '') +
-      stepLine(c, p) + (st && st.hint ? '<p class="small muted">' + esc(st.hint) + '</p>' : '') +
+      campInfoHtml(p) + stepLine(c, p) + (st && st.hint ? '<p class="small muted">' + esc(st.hint) + '</p>' : '') +
       (th ? '<div class="bar' + (pct >= 100 ? ' full' : '') + '"><i style="width:' + pct + '%"></i></div><p class="small">' + (Number(p.pv) || 0) + ' van ' + th.pv + ' ' + esc(th.label || 'PV') + '</p>' : '') +
       (p.note ? '<p class="small">' + esc(p.note) + '</p>' : '') +
       '<div class="row">' + (i < last ? '<button class="btn small" data-act="camp-next" data-id="' + esc(p.id) + '">Volgende stap</button>' : pill('Klaar')) + (i < last ? '<button class="btn ghost small" data-act="camp-msg" data-id="' + esc(p.id) + '">Bericht</button>' : '') +
@@ -1041,11 +1041,11 @@ function campDialog(d) {
   if (d.type === 'campperson') {
     const c = campById(d.camp), p = campDoc(d.camp).people.find(x => x.id === d.id) || {}, th = c.threshold && c.threshold.pv;
     return '<h2>Deelnemer bewerken</h2>' + field('cpp-name', 'Naam', p.name, 'data-autofocus') + '<label class="f" for="cpp-step">Stap<select id="cpp-step">' + c.steps.map(s => '<option value="' + esc(s.id) + '"' + (s.id === (c.steps[campStepIdx(c, p)] || {}).id ? ' selected' : '') + '>' + esc(s.label) + '</option>').join('') + '</select></label>' +
-      (th ? '<label class="f" for="cpp-pv">' + esc(c.threshold.label || 'PV') + ' tot nu toe<input type="number" id="cpp-pv" min="0" value="' + esc(p.pv || '') + '"></label>' : '') + areaField('cpp-note', 'Notitie', p.note) +
+      (th ? '<label class="f" for="cpp-pv">' + esc(c.threshold.label || 'PV') + ' tot nu toe<input type="number" id="cpp-pv" min="0" value="' + esc(p.pv || '') + '"></label>' : '') + areaField('cpp-note', 'Notitie', p.note) + campInfoHtml(p) +
       '<div class="row"><button class="btn" data-act="camp-person-save" data-id="' + esc(d.id) + '" data-camp="' + esc(d.camp) + '">Opslaan</button><button class="btn ghost" data-act="overlay-close">Annuleer</button><span class="spacer"></span><button class="btn danger" data-act="camp-person-del" data-id="' + esc(d.id) + '" data-camp="' + esc(d.camp) + '">Van de lijn halen</button></div>';
   }
   if (d.type === 'campmsg') {
-    return '<h2>Bericht voor ' + esc(d.name) + '</h2><p class="small muted">Concept van de coach. Pas aan en verstuur het zelf.</p><div class="brief" id="campmsgOut" aria-live="polite">' + (d.text ? md(d.text) : '<p class="muted">Het bericht wordt gemaakt…</p>') + '</div><div class="row"><button class="btn" data-act="camp-msg-copy">Kopieer</button><button class="btn ghost" data-act="camp-msg-std" data-id="' + esc(d.id) + '">Standaardtekst</button><button class="btn ghost" data-act="camp-msg-again" data-id="' + esc(d.id) + '">Ander concept</button><button class="btn ghost" data-act="overlay-close">Sluiten</button></div>';
+    return '<h2>Bericht voor ' + esc(d.name) + '</h2><p class="small muted">Concept van de coach. Pas aan en verstuur het zelf.</p>' + campInfoHtml((campDoc(d.camp).people || []).find(x => x.id === d.id)) + '<div class="brief" id="campmsgOut" aria-live="polite">' + (d.text ? md(d.text) : '<p class="muted">Het bericht wordt gemaakt…</p>') + '</div><div class="row"><button class="btn" data-act="camp-msg-copy">Kopieer</button><button class="btn ghost" data-act="camp-msg-std" data-id="' + esc(d.id) + '">Standaardtekst</button><button class="btn ghost" data-act="camp-msg-again" data-id="' + esc(d.id) + '">Ander concept</button><button class="btn ghost" data-act="overlay-close">Sluiten</button></div>';
   }
   return null;
 }
@@ -1092,6 +1092,17 @@ function campNameOf(cells) {
   let name = cells.find(c => /[A-Za-zÀ-ɏ]{2,}/.test(c) && !/@/.test(c) && !/^\d+$/.test(c) && !/^\d{1,4}[-\/.]\d{1,2}[-\/.]\d{1,4}$/.test(c)) || '';
   return name.replace(/^\d+[\).\-\s]+/, '').replace(/\s+/g, ' ').trim().slice(0, 80);
 }
+function campInfoOf(header, cells, name) {
+  if (!header) return [];
+  const out = [], nm = normName(name);
+  cells.forEach((v, i) => { const k = String(header[i] || '').trim(), val = String(v || '').trim(); if (!k || !val || normName(val) === nm) return; out.push({ k: k.slice(0, 40), v: val.slice(0, 120) }); });
+  return out.slice(0, 16);
+}
+const campIsPhone = (k, v) => /\b(tel|telefoon\w*|gsm\w*|mobiel|mobile|phone)\b/i.test(k) || (/^[+0][\d\s().\/-]{8,}$/.test(v) && v.replace(/\D/g, '').length >= 9 && v.replace(/\D/g, '').length <= 15);
+function campInfoHtml(p) {
+  const info = p && p.info || []; if (!info.length) return '';
+  return '<details class="pinfo"><summary>Gegevens uit je lijst (' + info.length + ')</summary><dl>' + info.map(x => '<dt>' + esc(x.k) + '</dt><dd>' + (campIsPhone(x.k, x.v) ? '<a href="tel:' + esc(x.v.replace(/[^\d+]/g, '')) + '">' + esc(x.v) + '</a>' : esc(x.v)) + '</dd>').join('') + '</dl></details>';
+}
 function campParseRows(text) {
   const lines = String(text || '').split(/\r?\n/).filter(l => l.trim()), rows = lines.map(campSplit);
   const numLike = c => /^\d+([.,]\d+)?$/.test(c) || /\d{1,4}[-\/.]\d{1,2}[-\/.]\d{1,4}/.test(c);
@@ -1101,14 +1112,14 @@ function campParseRows(text) {
     if (header && ri === 0) return;
     const name = campNameOf(cells);
     if (!name || /^(naam|name|member|lid|brand partner|id|downline|rank|status)$/i.test(name)) return;
-    const k = normName(name); if (!k || seen.has(k)) return; seen.add(k); out.push({ name, cells });
+    const k = normName(name); if (!k || seen.has(k)) return; seen.add(k); out.push({ name, cells, info: campInfoOf(header, cells, name) });
   });
   return { header, rows: out, hasData: out.some(r => r.cells.filter(Boolean).length > 1) };
 }
 const campParseNames = text => campParseRows(text).rows.map(r => r.name);
 
 async function campCheck(c, parsed, onProgress) {
-  const res = parsed.rows.map(r => ({ name: r.name, cells: r.cells, status: 'unknown', why: 'Alleen de naam is bekend, dus niet te controleren.' }));
+  const res = parsed.rows.map(r => ({ name: r.name, cells: r.cells, info: r.info || [], status: 'unknown', why: 'Alleen de naam is bekend, dus niet te controleren.' }));
   if (!parsed.hasData) return res;
   const rules = (c.criteria ? 'CONTROLECRITERIA:\n' + c.criteria + '\n\n' : '') + 'VOORWAARDEN:\n' + (c.rules || '-') + '\nWie komt op de lijn: ' + (c.audience || '-') + '\nPeriode: ' + (c.start || '?') + ' tot ' + (c.end || '?') + '. Vandaag is ' + todayKey() + '.';
   const size = 25;
@@ -1146,12 +1157,12 @@ function syncCamps() {
 
 function campAddPeople(id, items, pickedIds, fromReview) {
   const c = campById(id), doc = clone(campDoc(id)); doc.people = doc.people || []; doc.share = doc.share || 'off';
-  const have = new Set(doc.people.map(p => normName(p.name))), first = c.steps[0].id, now = new Date().toISOString(), contacts = allContacts(); let added = 0, dup = 0, linked = 0, bad = 0;
-  const add = (name, contactId, check) => { const k = normName(name); if (!k || have.has(k)) { dup++; return; } have.add(k); const m = contactId ? state.docs[contactId] : contacts.find(x => normName(x.name) === k); if (m) linked++; if (check && check.status === 'no') bad++; doc.people.push({ id: uid('cp'), name, step: first, contactId: m ? m.id : '', pv: 0, note: '', updated: now, check: check || null }); added++; };
-  items.forEach(x => add(x.name, '', x.check));
+  const have = new Set(doc.people.map(p => normName(p.name))), first = c.steps[0].id, now = new Date().toISOString(), contacts = allContacts(); let added = 0, upd = 0, dup = 0, linked = 0, bad = 0;
+  const add = (name, contactId, check, info) => { const k = normName(name); if (!k) { dup++; return; } if (have.has(k)) { const ex = doc.people.find(q => normName(q.name) === k); if (ex && info && info.length) { ex.info = info; upd++; } dup++; return; } have.add(k); const m = contactId ? state.docs[contactId] : contacts.find(x => normName(x.name) === k); if (m) linked++; if (check && check.status === 'no') bad++; doc.people.push({ id: uid('cp'), name, step: first, contactId: m ? m.id : '', pv: 0, note: '', updated: now, check: check || null, info: info && info.length ? info : undefined }); added++; };
+  items.forEach(x => add(x.name, '', x.check, x.info));
   (pickedIds || []).forEach(cid => { const ct = state.docs[cid]; if (ct) add(ct.name, cid, null); });
   saveCamp(id, doc); state.dialog = null; state.camp.q = ''; render();
-  toast(added + ' toegevoegd' + (linked ? ', ' + linked + ' gekoppeld aan je contacten' : '') + (dup ? ', ' + dup + ' stonden er al op' : '') + (bad ? '. Let op: ' + bad + ' voldoen mogelijk niet' : '') + (!fromReview && items.length ? '. Niet gecontroleerd op de voorwaarden.' : '.'));
+  toast(added + ' toegevoegd' + (linked ? ', ' + linked + ' gekoppeld aan je contacten' : '') + (dup ? ', ' + dup + ' stonden er al op' : '') + (upd ? ' (gegevens bijgewerkt bij ' + upd + ')' : '') + (bad ? '. Let op: ' + bad + ' voldoen mogelijk niet' : '') + (!fromReview && items.length ? '. Niet gecontroleerd op de voorwaarden.' : '.'));
 }
 
 /* ---------- acties ---------- */
@@ -1215,11 +1226,11 @@ async function campAct(a, d, el) {
       if (state.dialog !== dlg) return true;
       dlg.items = res; dlg.busy = false; render(); return true;
     }
-    campAddPeople(d.id, parsed.rows.map(r => ({ name: r.name })), picked, false); return true;
+    campAddPeople(d.id, parsed.rows.map(r => ({ name: r.name, info: r.info })), picked, false); return true;
   }
   if (a === 'camp-review-save') {
     const dlg = state.dialog, chosen = [...document.querySelectorAll('.cr-i:checked')].map(b => dlg.items[Number(b.value)]).filter(Boolean);
-    campAddPeople(d.id, chosen.map(x => ({ name: x.name, check: { status: x.status, why: x.why } })), dlg.picked || [], true); return true;
+    campAddPeople(d.id, chosen.map(x => ({ name: x.name, info: x.info, check: { status: x.status, why: x.why } })), dlg.picked || [], true); return true;
   }
   if (a === 'camp-more') { state.camp.limit = (state.camp.limit || 30) + 30; render(); return true; }
   if (a === 'camp-tpl') { state.dialog = { type: 'camptpl', id: d.id }; render(); return true; }
