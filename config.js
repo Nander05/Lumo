@@ -3,5 +3,5 @@
 window.LUMO_CONFIG = {
   supabaseUrl: 'https://wedefceaglmsvtewnzkj.supabase.co',
   supabaseAnonKey: 'sb_publishable_LTIGwvP_PwRFxwWMNVSsPQ_WYS7q3YO',
-  version: '2'
+  version: '3'
 };

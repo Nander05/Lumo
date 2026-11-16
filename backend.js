@@ -21,7 +21,7 @@
 
   /* ---------- schermen ---------- */
   function screen(html) {
-    appEl().innerHTML = '<div class="wiz" style="max-width:460px;margin:0 auto"><div class="row" style="color:var(--brand)"><span class="brand" style="font-size:28px">Lumo</span></div>' + html + '</div>';
+    appEl().innerHTML = '<div class="wiz" style="max-width:460px;margin:0 auto"><div class="row" style="color:var(--brand)"><span class="brand" style="font-size:28px">Lumo</span></div><div class="auth-card">' + html + '</div></div>';
   }
   function msg(t, ok) { var m = document.getElementById('lw-msg'); if (m) { m.textContent = t || ''; m.className = 'small ' + (ok ? 'muted' : ''); m.style.color = ok ? '' : 'var(--danger)'; } }
   function busy(b, label) { var x = document.getElementById('lw-go'); if (x) { x.disabled = !!b; if (label) x.textContent = label; } }
