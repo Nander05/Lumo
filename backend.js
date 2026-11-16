@@ -232,6 +232,20 @@
       regenerate: async function () { var r = await sb.rpc('regenerate_invite'); if (r.error) throw r.error; },
       setRole: async function (uid, role) { var r = await sb.rpc('set_member_role', { p_user: uid, p_role: role }); if (r.error) throw r.error; },
       removeMember: async function (uid) { var r = await sb.rpc('remove_member', { p_user: uid }); if (r.error) throw r.error; },
+      inbox: {
+        url: function () { return CFG.supabaseUrl + '/functions/v1/inbox'; },
+        hasKey: async function () { var r = await sb.rpc('inbox_has_key'); return !r.error && r.data === true; },
+        newKey: async function () {
+          var bytes = new Uint8Array(24); crypto.getRandomValues(bytes);
+          var key = 'lk_' + Array.prototype.map.call(bytes, function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+          var dig = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+          var hash = Array.prototype.map.call(new Uint8Array(dig), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+          var r = await sb.rpc('inbox_set_key', { p_hash: hash }); if (r.error) throw r.error; return key;
+        },
+        list: async function () { var r = await sb.from('report_inbox').select('id,filename,subject,created_at').order('created_at', { ascending: false }); if (r.error) throw r.error; return r.data || []; },
+        get: async function (id) { var r = await sb.from('report_inbox').select('body').eq('id', id).maybeSingle(); if (r.error) throw r.error; return r.data ? r.data.body : ''; },
+        remove: async function (id) { var r = await sb.from('report_inbox').delete().eq('id', id); if (r.error) throw r.error; }
+      },
       push: (function () {
         function b64(k) { var p = '='.repeat((4 - k.length % 4) % 4), r = (k + p).replace(/-/g, '+').replace(/_/g, '/'), raw = atob(r), o = new Uint8Array(raw.length); for (var i = 0; i < raw.length; i++) o[i] = raw.charCodeAt(i); return o; }
         var ios = /iphone|ipad|ipod/i.test(navigator.userAgent), standalone = window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);

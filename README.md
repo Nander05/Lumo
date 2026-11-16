@@ -93,3 +93,10 @@ Vervang `app.js` (en eventueel de andere bestanden), verhoog `version` in `confi
 
 ## Privacy en juridisch
 Dit pakket is techniek en geen juridisch advies. Zodra anderen hun gegevens invullen (en zeker namen van derden), ben jij verwerkingsverantwoordelijk. Denk aan: een privacyverklaring, een verwerkersovereenkomst met Supabase en Anthropic (beide bieden een standaardversie), en afspraken met leden over wat ze over anderen opslaan.
+
+## Rapporten via Gmail (optioneel)
+
+Elk lid kan het Young Living-rapport (CSV) automatisch in Lumo laten aankomen.
+1. Voer `supabase/inbox.sql` uit in de SQL Editor en deploy de functie `inbox` (bestand `supabase/dashboard/inbox.ts`, Verify JWT uit).
+2. In Lumo: Instellingen > Rapporten via Gmail > Koppel mijn Gmail. Je krijgt een eigen sleutel en een Google-script. Het script plak je in script.google.com en je voert `lumoInstall` uit.
+3. Elk uur zet het script nieuwe CSV-bijlagen in je eigen postvak in Lumo. Je ziet ze op Vandaag en in Instellingen, kiest een campagne en bevestigt de lijst.

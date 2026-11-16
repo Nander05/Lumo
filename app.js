@@ -391,7 +391,7 @@ function viewVandaag() {
     coachBtn('Avondcheck-in', 'Doe een korte avondcheck-in met me. Stel me één voor één drie korte vragen: wat ging goed, wat vroeg energie, en wat is morgen de eerste stap. Begin met de eerste vraag.') +
     coachBtn('Weekreview', 'Maak een weekreview: wat ging goed, wat bleef liggen, en een plan voor volgende week met maximaal drie prioriteiten. Gebruik mijn dagcijfers en pipeline.') + '</div>' +
     (state.brief ? '<div class="brief" id="brief" aria-live="polite">' + (state.brief.text ? md(state.brief.text) : '<p class="muted">De briefing wordt gemaakt…</p>') + '</div>' : '<p class="small muted">Eén klik geeft je een plan voor vandaag, op basis van je doelen, mensen en agenda.</p>') + '</section>' +
-    '<section class="card" aria-labelledby="h-dag"><h2 id="h-dag">Dagdoelen</h2>' + goals + '</section>' + campToday() +
+    '<section class="card" aria-labelledby="h-dag"><h2 id="h-dag">Dagdoelen</h2>' + goals + '</section>' + (typeof webInboxBanner === 'function' ? webInboxBanner() : '') + campToday() +
     '<div class="grid2"><section class="card soft" aria-labelledby="h-streak"><h2 id="h-streak" class="eyebrow">Reeks</h2><div class="big">' + streak() + '</div><p class="small">dagen achter elkaar actief</p></section>' +
     '<section class="card" aria-labelledby="h-week"><h2 id="h-week" class="eyebrow">Afgelopen 7 dagen</h2><div class="week">' + days + '</div></section></div>' +
     '<section class="card" aria-labelledby="h-due"><h2 id="h-due">Vandaag opvolgen</h2>' +
@@ -677,7 +677,7 @@ function toneRadios(sel, name) {
 function viewInstellingen() {
   const p = profile(), pr = prefs(), s = pr.share || { on: false, sections: {} }, sec = s.sections || {}; if (!state.editGoals) state.editGoals = clone(p.goals);
   const chk = (id, label, on) => '<label class="check"><input type="checkbox" id="' + id + '"' + (on ? ' checked' : '') + '><span>' + label + '</span></label>';
-  return '<h1>Instellingen en privacy</h1>' + (store.mode === 'local' ? '<div class="banner">Lokale modus: je gegevens staan alleen in deze browser en verdwijnen als je browsergegevens wist. Teamfuncties werken dan alleen voor jezelf.</div>' : '') + (typeof webTeamCard === 'function' ? webTeamCard() : '') +
+  return '<h1>Instellingen en privacy</h1>' + (store.mode === 'local' ? '<div class="banner">Lokale modus: je gegevens staan alleen in deze browser en verdwijnen als je browsergegevens wist. Teamfuncties werken dan alleen voor jezelf.</div>' : '') + (typeof webTeamCard === 'function' ? webTeamCard() : '') + (typeof webInboxCard === 'function' ? webInboxCard() : '') +
     '<section class="card" aria-labelledby="h-prof"><h2 id="h-prof">Mijn profiel</h2>' + field('s-name', 'Naam', p.name) + field('s-goal', 'Mijn doel', p.goal) +
     areaField('s-why', 'Waarom dit belangrijk is', p.why, 'De coach gebruikt dit om je te motiveren.') +
     '<label class="f" for="s-lang">Taal van de coach<select id="s-lang">' + Object.keys(LANGS).map(k => '<option value="' + k + '"' + (k === (p.lang || 'nl') ? ' selected' : '') + '>' + LANGS[k] + '</option>').join('') + '</select></label>' +
@@ -757,7 +757,7 @@ function overlayHTML() {
   if (d.type === 'agenda') { const it = isNew ? {} : sh('agenda').find(x => x.id === d.id) || {}; inner = '<h2>' + (isNew ? 'Afspraak toevoegen' : 'Afspraak bewerken') + '</h2>' + field('a-title', 'Titel', it.title, 'data-autofocus') + dateField('a-date', 'Datum', it.date) + field('a-time', 'Tijd', it.time, 'placeholder="20:00"') + field('a-place', 'Plek of link', it.place) + areaField('a-note', 'Notitie', it.note) + btns('agenda-save', d.id, 'agenda-del'); }
   if (d.type === 'chal') { const it = sh('challenge')[0] || {}; inner = '<h2>Teamuitdaging</h2>' + field('ch-title', 'Titel', it.title, 'data-autofocus') + areaField('ch-desc', 'Wat doen we?', it.desc) + dateField('ch-start', 'Start', it.start || todayKey()) + dateField('ch-end', 'Einde', it.end || addDays(todayKey(), 6)) + btns('chal-save', it.id || 'new', it.id ? 'chal-del' : ''); }
   if (d.type === 'mock') inner = mockHTML(d.kind);
-  { const cd = campDialog(d); if (cd) inner = cd; }
+  { const cd = campDialog(d); if (cd) inner = cd; } { const wd = typeof webDialog === 'function' ? webDialog(d) : ''; if (wd) inner = wd; }
   if (d.type === 'wipe') inner = '<h2>Alles wissen?</h2><p>Je profiel, doelen, mensen, cijfers en workshops worden verwijderd en je toestemming wordt ingetrokken. Dit kan niet ongedaan worden gemaakt.</p><div class="row"><button class="btn danger" data-act="data-wipe-confirm">Ja, wis alles</button><button class="btn ghost" data-act="overlay-close" data-autofocus>Annuleer</button></div>';
   return '<div class="veil" data-act="veil"><div class="sheet" role="dialog" aria-modal="true">' + inner + '</div></div>';
 }
@@ -1028,7 +1028,7 @@ function campDialog(d) {
   if (d.type === 'camppeople') {
     const c = campById(d.id), doc = campDoc(d.id), have = new Set(doc.people.map(p => p.contactId).filter(Boolean)), cts = allContacts().filter(x => !have.has(x.id));
     return '<h2>Deelnemers toevoegen</h2><p class="small muted">' + esc(c.audience || 'Wie meedoet staat in de voorwaarden.') + '</p>' +
-      areaField('cp-paste', 'Plak de lijst uit het Virtual Office', '', 'Plak liefst de hele tabel met kolomkoppen (zoals laatste bestelling of status). Dan controleert Claude of iedereen aan de voorwaarden voldoet. Alleen namen kan ook, maar dan is er niets te controleren.', true) +
+      areaField('cp-paste', 'Plak de lijst uit het Virtual Office', d.prefill || '', 'Plak liefst de hele tabel met kolomkoppen (zoals laatste bestelling of status). Dan controleert Claude of iedereen aan de voorwaarden voldoet. Alleen namen kan ook, maar dan is er niets te controleren.', true) +
       '<div><label class="btn ghost small" for="cpfile" style="cursor:pointer">CSV of tekstbestand laden</label><input id="cpfile" class="sr" type="file" accept=".txt,.csv,text/plain,text/csv" data-change="camp-file"></div>' +
       (cts.length ? '<fieldset class="fs"><legend>Of kies uit je contacten</legend><div style="max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:6px">' + cts.map(x => '<label class="check"><input type="checkbox" class="cp-c" value="' + esc(x.id) + '"><span>' + esc(x.name) + ' <span class="muted small">' + esc(x.kind || 'Prospect') + '</span></span></label>').join('') + '</div></fieldset>' : '') +
       '<div class="row"><button class="btn" data-act="camp-people-save" data-id="' + esc(d.id) + '">Toevoegen</button><button class="btn ghost" data-act="overlay-close">Annuleer</button></div>';
@@ -1168,13 +1168,13 @@ function syncCamps() {
   else if (!has && campSig) { campSig = ''; dropShared('campshares', me); }
 }
 
-function campAddPeople(id, items, pickedIds, fromReview) {
+function campAddPeople(id, items, pickedIds, fromReview, inboxId) {
   const c = campById(id), doc = clone(campDoc(id)); doc.people = doc.people || []; doc.share = doc.share || 'off';
   const have = new Set(doc.people.map(p => normName(p.name))), first = c.steps[0].id, now = new Date().toISOString(), contacts = allContacts(); let added = 0, upd = 0, dup = 0, linked = 0, bad = 0;
   const add = (name, contactId, check, info) => { const k = normName(name); if (!k) { dup++; return; } if (have.has(k)) { const ex = doc.people.find(q => normName(q.name) === k); if (ex && info && info.length) { ex.info = info; upd++; } dup++; return; } have.add(k); const m = contactId ? state.docs[contactId] : contacts.find(x => normName(x.name) === k); if (m) linked++; if (check && check.status === 'no') bad++; doc.people.push({ id: uid('cp'), name, step: first, contactId: m ? m.id : '', pv: 0, note: '', updated: now, check: check || null, info: info && info.length ? info : undefined }); added++; };
   items.forEach(x => add(x.name, '', x.check, x.info));
   (pickedIds || []).forEach(cid => { const ct = state.docs[cid]; if (ct) add(ct.name, cid, null); });
-  saveCamp(id, doc); state.dialog = null; state.camp.q = ''; render();
+  saveCamp(id, doc); state.dialog = null; state.camp.q = ''; render(); if (inboxId && window.__lumoWeb && window.__lumoWeb.inbox) window.__lumoWeb.inbox.remove(inboxId).then(() => webInboxLoad(true), () => {});
   toast(added + ' toegevoegd' + (linked ? ', ' + linked + ' gekoppeld aan je contacten' : '') + (dup ? ', ' + dup + ' stonden er al op' : '') + (upd ? ' (gegevens bijgewerkt bij ' + upd + ')' : '') + (bad ? '. Let op: ' + bad + ' voldoen mogelijk niet' : '') + (!fromReview && items.length ? '. Niet gecontroleerd op de voorwaarden.' : '.'));
 }
 
@@ -1233,17 +1233,17 @@ async function campAct(a, d, el) {
     const c = campById(d.id), parsed = campParseRows(val2('cp-paste')), picked = [...document.querySelectorAll('.cp-c:checked')].map(b => b.value);
     if (!parsed.rows.length && !picked.length) { toast('Plak de lijst of kies contacten.'); return true; }
     if (parsed.rows.length && parsed.hasData && (c.criteria || c.rules)) {
-      state.dialog = { type: 'campreview', id: d.id, busy: true, items: [], picked, prog: 'Claude leest ' + parsed.rows.length + ' regels…' }; render();
+      state.dialog = { type: 'campreview', id: d.id, inboxId: state.dialog && state.dialog.inboxId, busy: true, items: [], picked, prog: 'Claude leest ' + parsed.rows.length + ' regels…' }; render();
       const dlg = state.dialog;
       const res = await campCheck(c, parsed, (n, t) => { if (state.dialog === dlg) { dlg.prog = n + ' van ' + t + ' gecontroleerd…'; const sec = document.querySelector('.sheet .muted'); if (sec) sec.textContent = dlg.prog; } });
       if (state.dialog !== dlg) return true;
       dlg.items = res; dlg.busy = false; render(); return true;
     }
-    campAddPeople(d.id, parsed.rows.map(r => ({ name: r.name, info: r.info })), picked, false); return true;
+    campAddPeople(d.id, parsed.rows.map(r => ({ name: r.name, info: r.info })), picked, false, state.dialog && state.dialog.inboxId); return true;
   }
   if (a === 'camp-review-save') {
     const dlg = state.dialog, chosen = [...document.querySelectorAll('.cr-i:checked')].map(b => dlg.items[Number(b.value)]).filter(Boolean);
-    campAddPeople(d.id, chosen.map(x => ({ name: x.name, info: x.info, check: { status: x.status, why: x.why } })), dlg.picked || [], true); return true;
+    campAddPeople(d.id, chosen.map(x => ({ name: x.name, info: x.info, check: { status: x.status, why: x.why } })), dlg.picked || [], true, dlg.inboxId); return true;
   }
   if (a === 'camp-more') { state.camp.limit = (state.camp.limit || 30) + 30; render(); return true; }
   if (a === 'camp-tpl') { state.dialog = { type: 'camptpl', id: d.id }; render(); return true; }
@@ -1308,6 +1308,60 @@ function webPushCard() {
   else inner = '<p class="small muted">Meldingen staan aan op dit toestel.</p><label class="f" for="push-hour">Tijd van de ochtendmelding<select id="push-hour" data-change="web-push-hour">' + [6, 7, 8, 9, 10, 12, 18, 20].map(h => '<option value="' + h + '"' + (st.hour === h ? ' selected' : '') + '>' + (h < 10 ? '0' : '') + h + ':00</option>').join('') + '</select></label><div class="row"><button class="btn ghost" data-act="web-push-test">Stuur testmelding</button><button class="btn ghost" data-act="web-push-off">Uitzetten</button></div>';
   return '<section class="card" aria-labelledby="h-push"><h2 id="h-push">Meldingen</h2>' + inner + '</section>';
 }
+
+/* ---------- rapporten via e-mail (Gmail-scriptje) ---------- */
+let webInboxList = null, webInboxHas = null, webInboxLoading = false, webInboxSig = '';
+function webInboxLoad(force) {
+  const W = window.__lumoWeb; if (!W || !W.inbox || webInboxLoading || (webInboxList && !force)) return;
+  webInboxLoading = true;
+  Promise.all([W.inbox.list().catch(() => []), W.inbox.hasKey().catch(() => false)]).then(([l, h]) => {
+    const sig = JSON.stringify(l.map(x => x.id)) + h; webInboxList = l; webInboxHas = h; webInboxLoading = false;
+    if (sig !== webInboxSig) { webInboxSig = sig; if (state.ready && !state.dialog) softRender(); }
+  });
+}
+setInterval(() => { if (document.visibilityState === 'visible' && state.ready) webInboxLoad(true); }, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state.ready) webInboxLoad(true); });
+const webAgo = iso => { const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); return m < 2 ? 'zojuist' : m < 90 ? m + ' min geleden' : m < 2000 ? Math.round(m / 60) + ' uur geleden' : Math.round(m / 1440) + ' dagen geleden'; };
+function webInboxRows() {
+  return (webInboxList || []).map(x => '<div class="row"><span><b>' + esc(x.filename || 'Rapport') + '</b><br><span class="small muted">' + esc(webAgo(x.created_at)) + (x.subject ? ' · ' + esc(x.subject) : '') + '</span></span><span class="spacer"></span><button class="btn small" data-act="web-inbox-open" data-id="' + esc(x.id) + '" data-name="' + esc(x.filename || 'Rapport') + '">Importeer</button><button class="btn ghost small" data-act="web-inbox-del" data-id="' + esc(x.id) + '" aria-label="Verwijder dit rapport">×</button></div>').join('');
+}
+function webInboxBanner() {
+  if (!window.__lumoWeb || !window.__lumoWeb.inbox) return ''; webInboxLoad();
+  if (!webInboxList || !webInboxList.length) return '';
+  return '<section class="card gold" aria-labelledby="h-ib"><h2 id="h-ib">' + (webInboxList.length === 1 ? 'Nieuw rapport klaar' : webInboxList.length + ' nieuwe rapporten klaar') + '</h2>' + webInboxRows() + '</section>';
+}
+function webInboxCard() {
+  if (!window.__lumoWeb || !window.__lumoWeb.inbox) return ''; webInboxLoad();
+  const has = webInboxHas;
+  return '<section class="card" aria-labelledby="h-inb"><h2 id="h-inb">Rapporten via Gmail</h2><p class="small muted">Laat je Virtual Office-rapport (CSV) automatisch in Lumo aankomen. Je ziet het hier en op Vandaag, en kiest zelf in welke campagne het gaat. Dit werkt met Gmail.</p>' +
+    (webInboxList && webInboxList.length ? webInboxRows() : '') +
+    '<div class="row"><button class="btn' + (has ? ' ghost' : '') + '" data-act="web-inbox-setup">' + (has ? 'Nieuwe sleutel en script' : 'Koppel mijn Gmail') + '</button></div>' +
+    (has ? '<p class="small muted">Er staat een sleutel klaar. Maak je een nieuwe, dan werkt het oude script niet meer.</p>' : '') + '</section>';
+}
+function webInboxScript(url, key) {
+  return "// Lumo: stuurt Young Living-rapporten (CSV) uit je Gmail naar je eigen Lumo.\n// Je hoeft hier niets aan te passen. Voer eenmalig 'lumoInstall' uit.\n" +
+    "const LUMO_URL = '" + url + "';\nconst LUMO_KEY = '" + key + "';\n// Pas de afzender aan als de rapporten van een ander adres komen:\nconst LUMO_ZOEK = 'from:youngliving has:attachment filename:csv newer_than:7d -label:Lumo-verwerkt';\n\n" +
+    "function lumoInstall() {\n  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });\n  ScriptApp.newTrigger('lumoSync').timeBased().everyHours(1).create();\n  lumoSync();\n}\n\n" +
+    "function lumoSync() {\n  var label = GmailApp.getUserLabelByName('Lumo-verwerkt') || GmailApp.createLabel('Lumo-verwerkt');\n  GmailApp.search(LUMO_ZOEK, 0, 20).forEach(function (thread) {\n    var ok = true;\n    thread.getMessages().forEach(function (msg) {\n      msg.getAttachments().forEach(function (att) {\n        if (!/\\.(csv|tsv|txt)$/i.test(att.getName()) || att.getSize() > 1000000) return;\n        var txt = att.getDataAsString('UTF-8');\n        if (txt.indexOf('\\uFFFD') >= 0) txt = att.getDataAsString('windows-1252');\n        var res = UrlFetchApp.fetch(LUMO_URL, { method: 'post', contentType: 'application/json', muteHttpExceptions: true, payload: JSON.stringify({ key: LUMO_KEY, filename: att.getName(), subject: msg.getSubject(), csv: txt }) });\n        if (res.getResponseCode() !== 200) ok = false;\n      });\n    });\n    if (ok) thread.addLabel(label);\n  });\n}\n";
+}
+function webDialog(d) {
+  if (d.type === 'inboxsetup') {
+    if (!d.key) return '<h2>Gmail koppelen</h2><p class="muted">Sleutel maken…</p>';
+    const sc = webInboxScript(window.__lumoWeb.inbox.url(), d.key);
+    return '<h2>Gmail koppelen</h2><p class="small muted">Dit duurt ongeveer 10 minuten en je doet het één keer.</p>' +
+      '<ol class="small" style="padding-left:18px;display:flex;flex-direction:column;gap:6px"><li>Tik op <b>Kopieer script</b>.</li><li>Ga naar <b>script.google.com</b> (ingelogd met je Gmail) en kies <b>Nieuw project</b>.</li><li>Wis de bestaande tekst, plak het script en tik op het diskette-icoon om op te slaan.</li><li>Kies bovenaan de functie <b>lumoInstall</b> en tik op <b>Uitvoeren</b>.</li><li>Google vraagt toestemming. Kies je account, dan <b>Geavanceerd</b>, dan <b>Ga naar (onveilig)</b>. Het script is van jezelf, dus dit is normaal.</li></ol>' +
+      '<p class="small">Klaar. Elk uur kijkt het script of er een nieuwe CSV van Young Living is gekomen. De sleutel in dit script is alleen voor jou. Deel het script niet.</p>' +
+      '<textarea id="ib-script" readonly style="min-height:120px;font-family:monospace;font-size:12px">' + esc(sc) + '</textarea>' +
+      '<div class="row"><button class="btn" data-act="web-inbox-copy">Kopieer script</button><button class="btn ghost" data-act="overlay-close">Sluiten</button></div>';
+  }
+  if (d.type === 'inboximport') {
+    const camps = campAll().filter(c => campKind(c) === 'line' && c.status !== 'ended');
+    if (!camps.length) return '<h2>Rapport importeren</h2><p>Er is nog geen campagne met een lijn. Maak eerst een campagne.</p><div class="row"><button class="btn ghost" data-act="overlay-close">Sluiten</button></div>';
+    return '<h2>Rapport importeren</h2><p class="small muted">' + esc(d.name || '') + '</p><label class="f" for="ib-camp">In welke campagne?<select id="ib-camp">' + camps.map(c => '<option value="' + esc(c.id) + '">' + esc(c.title) + '</option>').join('') + '</select></label>' +
+      '<div class="row"><button class="btn" data-act="web-inbox-go" data-id="' + esc(d.id) + '">Verder</button><button class="btn ghost" data-act="overlay-close">Annuleer</button></div>';
+  }
+  return '';
+}
 async function webAct(a, d) {
   const W = window.__lumoWeb, i = webInfo(); if (!W) return false;
   const run = async (fn, okMsg) => { try { await fn(); await W.refresh(); render(); if (okMsg) toast(okMsg); } catch (e) { toast((e && e.message) || 'Dat lukte niet. Probeer het opnieuw.'); } };
@@ -1318,6 +1372,23 @@ async function webAct(a, d) {
   if (a === 'web-push-on') { try { await W.push.enable(8); webPushSt = null; webPushLoad(true); toast('Meldingen staan aan.'); } catch (e) { toast((e && e.message) || 'Dat lukte niet.'); } return true; }
   if (a === 'web-push-off') { try { await W.push.disable(); webPushSt = null; webPushLoad(true); toast('Meldingen staan uit.'); } catch (e) { toast((e && e.message) || 'Dat lukte niet.'); } return true; }
   if (a === 'web-push-test') { try { await W.push.test(); toast('Testmelding verstuurd.'); } catch (e) { toast((e && e.message) || 'Dat lukte niet.'); } return true; }
+  if (a === 'web-inbox-setup') {
+    if (webInboxHas && !confirm('Nieuwe sleutel maken? Een eerder geplakt script stopt dan met werken.')) return true;
+    state.dialog = { type: 'inboxsetup', key: '' }; render();
+    try { const key = await W.inbox.newKey(); webInboxHas = true; if (state.dialog && state.dialog.type === 'inboxsetup') { state.dialog.key = key; render(); } } catch (e) { state.dialog = null; render(); toast('De sleutel maken lukte niet. Voer eerst inbox.sql uit in Supabase.'); }
+    return true;
+  }
+  if (a === 'web-inbox-copy') { const el = $('#ib-script'); if (el) copyText(el.value); return true; }
+  if (a === 'web-inbox-open') { state.dialog = { type: 'inboximport', id: d.id, name: d.name }; render(); return true; }
+  if (a === 'web-inbox-del') { if (confirm('Dit rapport uit Lumo verwijderen?')) { try { await W.inbox.remove(d.id); } catch (e) { toast('Verwijderen lukte niet.'); } webInboxLoad(true); } return true; }
+  if (a === 'web-inbox-go') {
+    const campId = ($('#ib-camp') || {}).value; if (!campId) return true;
+    try { const body = await W.inbox.get(d.id); if (!body) { toast('Dit rapport is niet meer beschikbaar.'); return true; }
+      state.view = 'team'; state.sub.team = 'Campagnes'; state.camp.id = campId; state.camp.filter = 'Alles'; state.camp.q = ''; state.camp.limit = 30;
+      state.dialog = { type: 'camppeople', id: campId, prefill: body, inboxId: d.id }; render(); window.scrollTo(0, 0);
+    } catch (e) { toast('Het rapport kon niet worden geopend.'); }
+    return true;
+  }
   if (a === 'web-signout') { await W.signOut(); return true; }
   if (a === 'web-delete') { if (confirm('Je account en al je gegevens definitief verwijderen? Dit kan niet ongedaan worden gemaakt.')) { try { await W.deleteAccount(); } catch (e) { toast((e && e.message) || 'Dat lukte niet.'); } } return true; }
   return false;
