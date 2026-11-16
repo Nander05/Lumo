@@ -1106,10 +1106,13 @@ function campInfoHtml(p) {
 function campParseRows(text) {
   const lines = String(text || '').split(/\r?\n/).filter(l => l.trim()), rows = lines.map(campSplit);
   const numLike = c => /^\d+([.,]\d+)?$/.test(c) || /\d{1,4}[-\/.]\d{1,2}[-\/.]\d{1,4}/.test(c);
-  const header = rows.length > 1 && rows[0].filter(Boolean).length > 1 && rows[0].every(c => !numLike(c)) ? rows[0] : null;
+  const isHead = r => r.filter(Boolean).length > 1 && r.filter(Boolean).every(c => !numLike(c));
+  let hi = -1; for (let i = 0; i < Math.min(rows.length - 1, 12); i++) { if (isHead(rows[i]) && rows[i + 1].filter(Boolean).length > 1 && !isHead(rows[i + 1])) { hi = i; break; } }
+  if (hi < 0 && rows.length > 1 && isHead(rows[0])) hi = 0;
+  const header = hi >= 0 ? rows[hi] : null;
   const out = [], seen = new Set();
   rows.forEach((cells, ri) => {
-    if (header && ri === 0) return;
+    if (header && ri <= hi) return;
     const name = campNameOf(cells);
     if (!name || /^(naam|name|member|lid|brand partner|id|downline|rank|status)$/i.test(name)) return;
     const k = normName(name); if (!k || seen.has(k)) return; seen.add(k); out.push({ name, cells, info: campInfoOf(header, cells, name) });
