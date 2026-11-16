@@ -1313,6 +1313,27 @@ async function webAct(a, d) {
   return false;
 }
 
+/* ---------- waar je was blijft bewaard als de browser de pagina uit het geheugen haalt ---------- */
+(function navKeep() {
+  const K = 'lumo2:nav'; let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem(K) || 'null'); } catch (e) { saved = null; }
+  if (saved && Date.now() - (saved.t || 0) < 6 * 3600 * 1000) {
+    if (saved.view) state.view = saved.view;
+    if (saved.sub) Object.assign(state.sub, saved.sub);
+    if (saved.camp) Object.assign(state.camp, saved.camp);
+    if (saved.dlg && saved.dlg.type === 'campmsg' && saved.dlg.text) state.dialog = Object.assign({ busy: false }, saved.dlg);
+    let tries = 0; const t = setInterval(() => { tries++; if (state.ready && $('#main')) { clearInterval(t); if (saved.y) window.scrollTo(0, saved.y); } else if (tries > 50) clearInterval(t); }, 200);
+  } else saved = null;
+  const keep = () => {
+    if (!state.ready) return;
+    const dlg = state.dialog && state.dialog.type === 'campmsg' ? { type: 'campmsg', id: state.dialog.id, camp: state.dialog.camp, name: state.dialog.name, text: state.dialog.text } : null;
+    try { sessionStorage.setItem(K, JSON.stringify({ t: Date.now(), view: state.view, sub: state.sub, camp: { id: state.camp.id, view: state.camp.view, filter: state.camp.filter, month: state.camp.month }, dlg, y: window.scrollY })); } catch (e) { /* geen opslag */ }
+  };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') keep(); });
+  window.addEventListener('pagehide', keep);
+  setInterval(keep, 5000);
+})();
+
 /* ---------- coach, briefing, content, check ---------- */
 function scrollChat() { const el = $('#chat'); if (el && el.lastElementChild) el.lastElementChild.scrollIntoView({ block: 'end' }); }
 function captureInputs() {
