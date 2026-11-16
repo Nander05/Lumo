@@ -8,11 +8,19 @@ const anon = Deno.env.get('SUPABASE_ANON_KEY')!;
 const service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const asUser = (req: Request) => createClient(url, anon, { global: { headers: { Authorization: req.headers.get('Authorization') || '' } } });
 const admin = createClient(url, service);
+let lastAuthErr = '';
 
 Deno.serve((req: Request) => handle(req, {
   env: { ANTHROPIC_API_KEY: Deno.env.get('ANTHROPIC_API_KEY'), ANTHROPIC_MODEL: Deno.env.get('ANTHROPIC_MODEL'), AI_MONTHLY_LIMIT: Deno.env.get('AI_MONTHLY_LIMIT'), AI_MAX_CHARS: Deno.env.get('AI_MAX_CHARS') },
   fetch: (u: string, o: RequestInit) => fetch(u, o),
-  getUser: async (r: Request) => { const t = (r.headers.get('Authorization') || '').replace(/^Bearer\s+/i, ''); if (!t) return null; const { data } = await admin.auth.getUser(t); return data && data.user ? data.user : null; },
+  authError: () => lastAuthErr,
+  getUser: async (r: Request) => {
+    lastAuthErr = 'v3';
+    const t = (r.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    if (!t) { lastAuthErr = 'v3 geen token'; return null; }
+    try { const { data, error } = await admin.auth.getUser(t); if (error) { lastAuthErr = 'v3 ' + error.message; return null; } return data && data.user ? data.user : null; }
+    catch (e) { lastAuthErr = 'v3 ' + String(e && (e as Error).message || e); return null; }
+  },
   isMember: async (r: Request) => { const { data } = await asUser(r).rpc('team_info'); return !!data; },
   aiUse: async (uid: string, limit: number) => { const { data, error } = await admin.rpc('ai_use', { p_user: uid, p_limit: limit }); return !error && data === true; },
 }));

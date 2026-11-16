@@ -152,7 +152,7 @@
     catch (e) { if (e && e.name === 'AbortError') throw e; if (e && e.code) throw e; throw { code: 'network', message: 'Geen verbinding.' }; }
     if (!res.ok) {
       var j = {}; try { j = await res.json(); } catch (e) { /* */ }
-      throw { code: res.status === 429 ? 'limit' : (res.status === 401 && j.error === 'auth') ? 'auth' : 'upstream', message: j.message || 'De coach kon geen antwoord maken.', detail: res.status + (j.message || j.error ? ': ' + (j.message || j.error) : '') };
+      throw { code: res.status === 429 ? 'limit' : 'upstream', message: j.message || 'De coach kon geen antwoord maken.', detail: res.status + (j.detail || j.message || j.error ? ': ' + (j.detail || j.message || j.error) : '') };
     }
     return res;
   }

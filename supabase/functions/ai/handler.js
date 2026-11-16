@@ -19,7 +19,7 @@ export async function handle(req, deps) {
   if (req.method !== 'POST') return J({ error: 'method' }, 405);
   const env = deps.env;
   const user = await deps.getUser(req);
-  if (!user) return J({ error: 'auth', message: 'Log opnieuw in.' }, 401);
+  if (!user) return J({ error: 'auth', message: 'Log opnieuw in.', detail: (deps.authError && deps.authError()) || '' }, 401);
   if (!(await deps.isMember(req))) return J({ error: 'team', message: 'Je zit nog in geen team.' }, 403);
 
   let body;
