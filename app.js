@@ -208,6 +208,7 @@ function customerDue(c) { return c.lastOrder && c.cycle ? addDays(c.lastOrder, p
 function quiet() {
   const t = todayKey(), out = [];
   allContacts().forEach(c => {
+    if (c.org) return;
     const upd = (c.updatedAt || '').slice(0, 10) || '0000-00-00', age = daysBetween(upd, t);
     if (c.kind === 'Klant') { const d = customerDue(c); if (d && d <= addDays(t, 3)) out.push({ c, why: 'tijd voor contact rond een nieuwe bestelling' }); }
     else if (c.stage === 'Gestart' || c.stage === 'Later') { if (c.kind === 'Teamlid' && age >= 14) out.push({ c, why: age + ' dagen niets gehoord' }); }
@@ -429,7 +430,7 @@ function viewMensen() {
   } else if (sub === 'Klanten') {
     const l = byKind('Klant'); body = '<p class="small muted">Vul bij een klant de laatste bestelling en de gemiddelde cyclus in. Dan krijg je op tijd een herinnering.</p><div class="board">' + (l.map(contactCard).join('') || '<p class="muted">Nog geen klanten. Voeg een contact toe met soort Klant.</p>') + '</div>';
   } else if (sub === 'Teamleden') {
-    const l = byKind('Teamlid'); body = '<p class="small muted">Je krijgt een seintje bij dag 7, 30, 90, 180 en 365 van elk teamlid.</p><div class="board">' + (l.map(contactCard).join('') || '<p class="muted">Nog geen teamleden. Voeg een contact toe met soort Teamlid.</p>') + '</div>';
+    const l = byKind('Teamlid'); body = '<div class="row"><span class="spacer"></span><button class="btn" data-act="org-import">Organisatie importeren</button></div>' + (l.length > 8 ? '<label class="f"><span class="sr">Zoek op naam</span><input type="search" data-input="orgsearch" placeholder="Zoek op naam of gsm…" value="' + esc(state.orgq || '') + '"></label>' : '') + '<div id="orglist">' + orgListHtml() + '</div>';
   } else {
     const ws = workshops();
     body = '<div class="row"><span class="spacer"></span><button class="btn" data-act="event-new">Nieuwe workshop</button></div>' + (ws.map(w => {
@@ -728,7 +729,7 @@ function overlayHTML() {
       '<label class="f" for="c-kind">Soort<select id="c-kind">' + optList(KINDS, c.kind || 'Prospect') + '</select></label>' +
       '<label class="f" for="c-stage">Fase<select id="c-stage">' + optList(STAGES, c.stage) + '</select></label>' + dateField('c-next', 'Volgend contact', c.next) + dateField('c-birth', 'Verjaardag (optioneel)', c.birthday) +
       '<fieldset class="fs"><legend>Alleen voor klanten</legend>' + dateField('c-last', 'Laatste bestelling', c.lastOrder) + '<label class="f" for="c-cycle">Gemiddelde cyclus in dagen<input type="number" id="c-cycle" min="1" max="365" value="' + esc(c.cycle || '') + '"></label></fieldset>' +
-      '<fieldset class="fs"><legend>Alleen voor teamleden</legend>' + dateField('c-start', 'Startdatum', c.startDate) + '</fieldset>' + areaField('c-note', 'Notitie', c.note) + btns('contact-save', d.id, 'contact-del');
+      '<fieldset class="fs"><legend>Alleen voor teamleden</legend>' + dateField('c-start', 'Startdatum', c.startDate) + '</fieldset>' + areaField('c-note', 'Notitie', c.note) + campInfoHtml(c) + btns('contact-save', d.id, 'contact-del');
   }
   if (d.type === 'event') {
     const e = isNew ? {} : state.docs[d.id] || {};
@@ -757,7 +758,7 @@ function overlayHTML() {
   if (d.type === 'agenda') { const it = isNew ? {} : sh('agenda').find(x => x.id === d.id) || {}; inner = '<h2>' + (isNew ? 'Afspraak toevoegen' : 'Afspraak bewerken') + '</h2>' + field('a-title', 'Titel', it.title, 'data-autofocus') + dateField('a-date', 'Datum', it.date) + field('a-time', 'Tijd', it.time, 'placeholder="20:00"') + field('a-place', 'Plek of link', it.place) + areaField('a-note', 'Notitie', it.note) + btns('agenda-save', d.id, 'agenda-del'); }
   if (d.type === 'chal') { const it = sh('challenge')[0] || {}; inner = '<h2>Teamuitdaging</h2>' + field('ch-title', 'Titel', it.title, 'data-autofocus') + areaField('ch-desc', 'Wat doen we?', it.desc) + dateField('ch-start', 'Start', it.start || todayKey()) + dateField('ch-end', 'Einde', it.end || addDays(todayKey(), 6)) + btns('chal-save', it.id || 'new', it.id ? 'chal-del' : ''); }
   if (d.type === 'mock') inner = mockHTML(d.kind);
-  { const cd = campDialog(d); if (cd) inner = cd; } { const wd = typeof webDialog === 'function' ? webDialog(d) : ''; if (wd) inner = wd; }
+  { const cd = campDialog(d); if (cd) inner = cd; } { const wd = typeof webDialog === 'function' ? webDialog(d) : ''; if (wd) inner = wd; } { const od = orgDialog(d); if (od) inner = od; }
   if (d.type === 'wipe') inner = '<h2>Alles wissen?</h2><p>Je profiel, doelen, mensen, cijfers en workshops worden verwijderd en je toestemming wordt ingetrokken. Dit kan niet ongedaan worden gemaakt.</p><div class="row"><button class="btn danger" data-act="data-wipe-confirm">Ja, wis alles</button><button class="btn ghost" data-act="overlay-close" data-autofocus>Annuleer</button></div>';
   return '<div class="veil" data-act="veil"><div class="sheet" role="dialog" aria-modal="true">' + inner + '</div></div>';
 }
@@ -1113,6 +1114,45 @@ function campInfoHtml(p) {
   const info = p && p.info || []; if (!info.length) return '';
   return '<details class="pinfo"><summary>Gegevens uit je lijst (' + info.length + ')</summary><dl>' + info.map(x => '<dt>' + esc(x.k) + '</dt><dd>' + (campIsPhone(x.k, x.v) ? '<a href="tel:' + esc(x.v.replace(/[^\d+]/g, '')) + '">' + esc(x.v) + '</a>' : esc(x.v)) + '</dd>').join('') + '</dl></details>';
 }
+
+/* ---------- hele organisatie uit het rapport ---------- */
+function orgDate(v) {
+  v = String(v || '').trim(); let m;
+  if ((m = v.match(/^(\d{4})-(\d{2})-(\d{2})/))) return m[1] + '-' + m[2] + '-' + m[3];
+  if ((m = v.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/))) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  return '';
+}
+function orgPlan(rows) {
+  const have = new Map(allContacts().map(c => [normName(c.name), c])), fresh = [], upd = [], seen = new Set();
+  rows.forEach(r => { const k = normName(r.name); if (!k || seen.has(k)) return; seen.add(k); (have.has(k) ? upd : fresh).push({ r, c: have.get(k) }); });
+  return { fresh, upd };
+}
+function orgSave(d) {
+  if (!d || d.type !== 'orgreview') return; const p = orgPlan(d.rows || []), now = new Date().toISOString();
+  p.fresh.forEach(x => save(uid('contact'), { name: x.r.name, kind: 'Teamlid', stage: 'Gestart', next: '', birthday: '', lastOrder: x.r.lastOrder || '', cycle: '', startDate: '', note: '', info: x.r.info && x.r.info.length ? x.r.info : undefined, org: true, updatedAt: now }));
+  p.upd.forEach(x => { if (x.r.info && x.r.info.length) save(x.c.id, Object.assign({}, state.docs[x.c.id], { info: x.r.info, lastOrder: x.r.lastOrder || (state.docs[x.c.id] || {}).lastOrder || '' })); });
+  const ib = d.inboxId; state.dialog = null; state.view = 'mensen'; state.sub.mensen = 'Teamleden'; state.orgq = ''; render(); window.scrollTo(0, 0);
+  toast(p.fresh.length + ' toegevoegd' + (p.upd.length ? ', ' + p.upd.length + ' bijgewerkt' : '') + '.');
+  if (ib && window.__lumoWeb && window.__lumoWeb.inbox) window.__lumoWeb.inbox.remove(ib).then(() => webInboxLoad(true), () => {});
+}
+function orgListHtml() {
+  const all = byKind('Teamlid'), q = normName(state.orgq || ''), hit = q ? all.filter(c => normName(c.name + ' ' + (c.info || []).map(x => x.v).join(' ')).includes(q)) : all, cap = 40;
+  if (!all.length) return '<p class="muted">Nog geen teamleden. Importeer je organisatie uit het Virtual Office, of voeg een contact toe met soort Teamlid.</p>';
+  return '<p class="small muted">' + hit.length + ' van ' + all.length + ' mensen' + (hit.length > cap ? '. Zoek op naam om de rest te vinden.' : '') + '</p><div class="board">' + hit.slice(0, cap).map(contactCard).join('') + '</div>';
+}
+function orgDialog(d) {
+  if (d.type === 'orgpaste') return '<h2>Mijn organisatie importeren</h2><p class="small muted">Plak de tabel uit het Virtual Office of laad het CSV-bestand. Iedereen komt bij Mensen onder Teamleden, met sponsor, enroller en gsm erbij. Wie er al staat wordt bijgewerkt.</p>' +
+    areaField('org-paste', 'Plak de lijst', d.prefill || '', 'Met kolomkoppen, bijvoorbeeld Name, Sponsor Name, Enroller Name, Phone.') +
+    '<div><label class="btn ghost small" for="orgfile" style="cursor:pointer">CSV of tekstbestand laden</label><input id="orgfile" class="sr" type="file" accept=".txt,.csv,.tsv,text/plain,text/csv" data-change="org-file"></div>' +
+    '<div class="row"><button class="btn" data-act="org-parse">Controleren</button><button class="btn ghost" data-act="overlay-close">Annuleer</button></div>';
+  if (d.type === 'orgreview') {
+    const p = orgPlan(d.rows || []);
+    return '<h2>Mijn organisatie</h2><p><b>' + p.fresh.length + '</b> nieuw, <b>' + p.upd.length + '</b> staan er al' + (d.hasHeader ? ' en krijgen hun gegevens bijgewerkt.' : '. Zonder kolomkoppen kan ik geen sponsor of gsm bewaren.') + '</p>' +
+      (p.fresh.length ? '<p class="small muted">Bijvoorbeeld: ' + esc(p.fresh.slice(0, 3).map(x => x.r.name).join(', ')) + (p.fresh.length > 3 ? ' en ' + (p.fresh.length - 3) + ' anderen' : '') + '</p>' : '') +
+      '<div class="row"><button class="btn" data-act="org-save">Toevoegen</button><button class="btn ghost" data-act="overlay-close">Annuleer</button></div>';
+  }
+  return '';
+}
 function campParseRows(text) {
   const lines = String(text || '').split(/\r?\n/).filter(l => l.trim()), rows = lines.map(campSplit);
   const numLike = c => /^\d+([.,]\d+)?$/.test(c) || /\d{1,4}[-\/.]\d{1,2}[-\/.]\d{1,4}/.test(c);
@@ -1272,6 +1312,13 @@ async function campAct(a, d, el) {
   }
   if (a === 'camp-person-del') { const doc = clone(campDoc(d.camp)); doc.people = doc.people.filter(x => x.id !== d.id); saveCamp(d.camp, doc); state.dialog = null; render(); return true; }
   if (a === 'camp-msg') { const c = campById(state.camp.id), p = campDoc(c.id).people.find(x => x.id === d.id); state.dialog = { type: 'campmsg', id: d.id, camp: c.id, name: p.name, text: '', busy: false }; render(); campMsgRun(); return true; }
+  if (a === 'org-import') { state.dialog = { type: 'orgpaste' }; render(); return true; }
+  if (a === 'org-parse') {
+    const text = val('org-paste'); if (!text.trim()) { toast('Plak eerst de lijst of laad een bestand.'); return true; }
+    const parsed = campParseRows(text); if (!parsed.rows.length) { toast('Ik vond geen namen. Controleer de lijst.'); return true; }
+    state.dialog = { type: 'orgreview', rows: parsed.rows.map(r => ({ name: r.name, info: r.info, lastOrder: orgDate(((r.info || []).find(x => /last order|laatste bestelling/i.test(x.k)) || {}).v) })), inboxId: state.dialog && state.dialog.inboxId, hasHeader: !!parsed.header }; render(); return true;
+  }
+  if (a === 'org-save') { orgSave(state.dialog); return true; }
   if (a === 'camp-msg-std') { const dl = state.dialog; if (!dl || dl.type !== 'campmsg') return true; const c = campById(dl.camp), p = campDoc(dl.camp).people.find(x => x.id === dl.id); if (!c || !p) return true; const st = c.steps[campStepIdx(c, p)]; dl.text = campFirstStepMsg(c, p, { msg: campTpl(c, st) }) || st.hint || ''; const o = $('#campmsgOut'); if (o) o.innerHTML = md(dl.text); return true; }
   if (a === 'camp-msg-again') { campMsgRun(); return true; }
   if (a === 'camp-msg-copy') { if (state.dialog && state.dialog.text) copyText(state.dialog.text); return true; }
@@ -1530,7 +1577,7 @@ async function onAct(a, el, ev) {
   if (a === 'contact-save') {
     const name = val('c-name').trim(); if (!name) { toast('Vul een naam in.'); return; }
     const id = d.id === 'new' ? uid('contact') : d.id;
-    return closeAnd(() => save(id, { name, kind: val('c-kind'), stage: val('c-stage'), next: val('c-next'), birthday: val('c-birth'), lastOrder: val('c-last'), cycle: val('c-cycle'), startDate: val('c-start'), note: val('c-note').trim(), updatedAt: new Date().toISOString() }));
+    return closeAnd(() => save(id, { name, kind: val('c-kind'), stage: val('c-stage'), next: val('c-next'), birthday: val('c-birth'), lastOrder: val('c-last'), cycle: val('c-cycle'), startDate: val('c-start'), note: val('c-note').trim(), info: (state.docs[id] || {}).info, org: (state.docs[id] || {}).org, updatedAt: new Date().toISOString() }));
   }
   if (a === 'contact-del') { remove(d.id); state.dialog = null; render(); toast('Contact verwijderd.'); return; }
   /* workshops */
@@ -1681,6 +1728,7 @@ document.addEventListener('change', async e => {
   if (k === 'camp-kind') { const dlg = state.dialog; if (dlg && dlg.type === 'campedit') { dlg.draft = campReadDraft(dlg); dlg.draft.kind = el.value; render(); } return; }
   if (k === 'camp-task') { const id = state.camp.id, doc = clone(campDoc(id)); doc.tasks = doc.tasks || {}; if (el.checked) doc.tasks[el.dataset.id] = new Date().toISOString(); else delete doc.tasks[el.dataset.id]; saveCamp(id, doc); render(); return; }
   if (k === 'camp-share') { const id = el.dataset.id, doc = clone(campDoc(id)); doc.share = el.value; save('camp-' + id, doc); render(); toast(el.value === 'off' ? 'Je deelt niets meer voor deze campagne.' : 'Gedeeld met je upline.'); return; }
+  if (k === 'org-file') { const f = el.files && el.files[0]; if (!f) return; if (f.size > 1500000) { toast('Dit bestand is te groot.'); return; } f.arrayBuffer().then(buf => { let t = new TextDecoder('utf-8').decode(buf); if (t.includes('\uFFFD')) t = new TextDecoder('windows-1252').decode(buf); const ta = $('#org-paste'); if (ta) { ta.value = t.replace(/^\uFEFF/, ''); toast('Bestand geladen. Kies Controleren.'); } }, () => toast('Het bestand kon niet worden gelezen.')); return; }
   if (k === 'camp-file') { const f = el.files && el.files[0]; if (!f) return; if (f.size > 500000) { toast('Dit bestand is te groot.'); return; } const r = new FileReader(); r.onload = () => { const ta = $('#cp-paste'); if (ta) ta.value = String(r.result || '').slice(0, 60000); }; r.onerror = () => toast('Het bestand kon niet worden gelezen.'); r.readAsText(f); return; }
   if (k === 'fig-file' || k === 'lib-file') {
     const f = el.files && el.files[0]; if (!f) return;
@@ -1698,6 +1746,7 @@ document.addEventListener('change', async e => {
 });
 document.addEventListener('input', e => {
   const el = e.target;
+  if (el.dataset && el.dataset.input === 'orgsearch') { state.orgq = el.value; const box = $('#orglist'); if (box) box.innerHTML = orgListHtml(); return; }
   if (el.dataset && el.dataset.input === 'campsearch') { state.camp.q = el.value; state.camp.limit = 30; const c = campById(state.camp.id), box = $('#camplist'); if (c && box) box.innerHTML = campBody(c); return; }
   if (el.dataset && el.dataset.input === 'libsearch') {
     state.libSearch = el.value; const q = state.libSearch.toLowerCase(), cat = state.libCat;
