@@ -1539,7 +1539,7 @@ async function closeAnd(fn) { state.dialog = null; if (fn) await fn(); render();
 
 async function onAct(a, el, ev) {
   const d = el.dataset;
-  if (String(a).indexOf('camp-') === 0 && await campAct(a, d, el)) return;
+  if ((String(a).indexOf('camp-') === 0 || String(a).indexOf('org-') === 0) && await campAct(a, d, el)) return;
   if (String(a).indexOf('web-') === 0 && typeof webAct === 'function' && await webAct(a, d, el)) return;
   if (a === 'veil') { if (el === ev.target) { state.dialog = null; render(); } return; }
   if (a === 'nav') { markLibSeen(); state.view = d.view; state.dialog = null; state.editGoals = null; render(); window.scrollTo(0, 0); return; }
