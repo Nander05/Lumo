@@ -692,7 +692,7 @@ function viewInstellingen() {
     '<li>Bij elke vraag aan de coach stuurt Lumo je doelen, mensen, cijfers en de bibliotheek naar Claude van Anthropic om een antwoord te maken.</li>' +
     '<li>Je gaf toestemming op ' + esc(new Date(p.consentAt).toLocaleDateString('nl-NL')) + '. Je kunt die altijd intrekken: dan worden al je gegevens gewist.</li></ul>' +
     '<div class="row">' + (store.canDownload ? '<button class="btn ghost" data-act="data-download">Download mijn gegevens</button>' : '') + '<button class="btn danger" data-act="data-wipe">Trek toestemming in en wis alles</button></div></section>' +
-    '<p class="small muted">Lumo is een onafhankelijke tool voor wellness-ondernemers en is niet verbonden aan, gesponsord of goedgekeurd door Young Living. Versie 2.</p>';
+    '<p class="small muted">Lumo is een onafhankelijke tool voor wellness-ondernemers en is niet verbonden aan, gesponsord of goedgekeurd door Young Living. Versie 2, build ' + esc(String((window.LUMO_CONFIG || {}).version || '?')) + '.</p>';
 }
 
 /* ---------- wizard ---------- */
