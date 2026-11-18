@@ -1338,8 +1338,9 @@ function orgPlan(rows) {
   const tree = orgTreeOf(rows, r => r.yl && r.yl.lvl);
   rows.forEach((r, i) => {
     const k = normName(r.name); if (!k || seen.has(k)) return; seen.add(k);
-    const c = have.get(k), kids = tree.kids[i], y = r.yl || {}, auto = y.cq || kids > 0 ? 'Teamlid' : 'Klant';
-    const kind = c && (!c.org || c.kindSet) ? c.kind : auto;
+    const c = have.get(k), kids = tree.kids[i];
+    // Iedereen uit het rapport is klant, tenzij jij iemand zelf als teamlid aanwijst.
+    const kind = c && (!c.org || c.kindSet) ? c.kind : 'Klant';
     (c ? upd : fresh).push({ r, c, kind, kids });
   });
   const stale = allContacts().filter(c => c.org && !c.yl && !seen.has(normName(c.name)));
@@ -1378,7 +1379,7 @@ function orgCard(c) {
   const l2 = c.kind === 'Teamlid' ? '<p class="small">OGV <b>' + orgFmt(y.ogv || 0) + '</b> · PGV <b>' + orgFmt(y.pgv || 0) + '</b> · Direct <b>' + (y.kids || 0) + '</b></p>' : '';
   return '<div class="contact org"><div class="row"><span class="nm">' + esc(c.name) + '</span></div><div class="row" style="gap:6px;flex-wrap:wrap">' + orgBadges(c) + '</div>' +
     '<p class="small">' + l1 + '</p>' + l2 + (y.phone ? '<p class="small"><a href="tel:' + esc(String(y.phone).replace(/[^\d+]/g, '')) + '">' + esc(y.phone) + '</a>' + (y.city ? ' · ' + esc(y.city) : '') + '</p>' : '') +
-    '<div class="row"><span class="spacer"></span><button class="btn ghost small" data-act="contact-edit" data-id="' + c.id + '">Details</button></div></div>';
+    '<div class="row"><button class="btn ghost small" data-act="org-kind" data-id="' + c.id + '" data-k="' + (c.kind === 'Teamlid' ? 'Klant' : 'Teamlid') + '">' + (c.kind === 'Teamlid' ? 'Terug naar klant' : 'Maak teamlid (actief business)') + '</button><span class="spacer"></span><button class="btn ghost small" data-act="contact-edit" data-id="' + c.id + '">Details</button></div></div>';
 }
 const ORG_FILTERS = { Klant: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'], Teamlid: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'] };
 function orgListHtml(kind) {
@@ -1389,7 +1390,7 @@ function orgListHtml(kind) {
   const mw = c => c.yl && c.yl.mwo != null ? c.yl.mwo : -1, pv = c => c.yl ? c.yl.pv || 0 : 0, og = c => c.yl ? c.yl.ogv || 0 : 0;
   hit.sort(s === 'Laatst besteld (oudste eerst)' ? (a, b) => mw(b) - mw(a) || a.name.localeCompare(b.name) : s === 'PV (hoog naar laag)' ? (a, b) => pv(b) - pv(a) : s === 'OGV (hoog naar laag)' ? (a, b) => og(b) - og(a) : (a, b) => (a.name || '').localeCompare(b.name || ''));
   const lr = all.filter(c => c.yl && c.yl.au).length, cap = 40;
-  if (!all.length) return '<p class="muted">' + (kind === 'Klant' ? 'Nog geen klanten.' : 'Nog geen teamleden.') + ' Importeer je organisatie uit het Virtual Office, of voeg een contact toe.</p>';
+  if (!all.length) return '<p class="muted">' + (kind === 'Klant' ? 'Nog geen klanten. Importeer je organisatie uit het Virtual Office, of voeg een contact toe.' : 'Nog geen teamleden. Open Klanten en tik bij iemand op Maak teamlid zodra die een actief business kiest.') + '</p>';
   return '<p class="small muted">' + hit.length + ' van ' + all.length + (kind === 'Klant' ? ' klanten · ' + lr + ' met Loyalty Rewards · ' + (all.length - lr) + ' zonder' : ' teamleden · ' + lr + ' met Loyalty Rewards') + (hit.length > cap ? '. Zoek of filter om de rest te zien.' : '') + '</p><div class="board">' + hit.slice(0, cap).map(c => c.yl ? orgCard(c) : contactCard(c)).join('') + '</div>';
 }
 function orgPageHtml(kind) {
@@ -1436,6 +1437,7 @@ function orgYlHtml(c) {
   return '<details class="pinfo" open><summary>Cijfers uit je rapport</summary><dl>' + rows.map(r => '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd>').join('') + '</dl></details>';
 }
 function orgAct(a, d) {
+  if (a === 'org-kind') { const c0 = state.docs[d.id]; if (!c0) return true; save(d.id, Object.assign({}, c0, { kind: d.k, kindSet: true, updatedAt: new Date().toISOString() })); render(); toast(d.k === 'Teamlid' ? (c0.name + ' is nu teamlid.') : (c0.name + ' staat weer bij de klanten.')); return true; }
   if (a === 'org-filter') { state.orgf = d.f; render(); return true; }
   if (a === 'org-net') { state.netOpen = Object.assign({}, state.netOpen || {}); if (state.netOpen[d.id]) delete state.netOpen[d.id]; else state.netOpen[d.id] = true; render(); return true; }
   if (a === 'org-net-all') { const o = {}; if (d.o === '1') orgNodes().kids.forEach((v, k) => { o[k] = true; }); state.netOpen = o; render(); return true; }
