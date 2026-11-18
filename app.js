@@ -58,7 +58,7 @@ const SHARED = ['library', 'glibrary', 'training', 'playbook', 'agenda', 'challe
 const libAll = () => sh('library').concat(sh('glibrary').map(i => Object.assign({}, i, { central: true })));
 const LEADER_ONLY = ['shares', 'help', 'campshares'];
 const SUBS = {
-  mensen: ['Pipeline', 'Klanten', 'Teamleden', 'Workshops'],
+  mensen: ['Pipeline', 'Klanten', 'Teamleden', 'Netwerk', 'Workshops'],
   groei: ['Content', 'Controle', 'Cijfers'],
   team: ['Bibliotheek', 'Campagnes', 'Training', 'Draaiboek', 'Agenda', 'Uitdaging', 'Mentor', 'Erkenning', 'Hulp', 'Overzicht']
 };
@@ -428,9 +428,11 @@ function viewMensen() {
     const all = byKind('Prospect');
     body = '<div class="board">' + STAGES.map(s => { const l = all.filter(c => (STAGES.includes(c.stage) ? c.stage : 'Nieuw') === s); return '<section class="stage" aria-labelledby="st-' + s + '"><h3 id="st-' + s + '">' + s + ' ' + pill(l.length) + '</h3>' + (l.map(contactCard).join('') || '<p class="small muted">Leeg</p>') + '</section>'; }).join('') + '</div>';
   } else if (sub === 'Klanten') {
-    const l = byKind('Klant'); body = '<p class="small muted">Vul bij een klant de laatste bestelling en de gemiddelde cyclus in. Dan krijg je op tijd een herinnering.</p><div class="board">' + (l.map(contactCard).join('') || '<p class="muted">Nog geen klanten. Voeg een contact toe met soort Klant.</p>') + '</div>';
+    body = orgPageHtml('Klant');
   } else if (sub === 'Teamleden') {
-    const l = byKind('Teamlid'); body = '<div class="row"><span class="spacer"></span><button class="btn" data-act="org-import">Organisatie importeren</button></div>' + (l.length > 8 ? '<label class="f"><span class="sr">Zoek op naam</span><input type="search" data-input="orgsearch" placeholder="Zoek op naam of gsm…" value="' + esc(state.orgq || '') + '"></label>' : '') + '<div id="orglist">' + orgListHtml() + '</div>';
+    body = orgPageHtml('Teamlid');
+  } else if (sub === 'Netwerk') {
+    body = orgNetHtml();
   } else {
     const ws = workshops();
     body = '<div class="row"><span class="spacer"></span><button class="btn" data-act="event-new">Nieuwe workshop</button></div>' + (ws.map(w => {
@@ -729,7 +731,7 @@ function overlayHTML() {
       '<label class="f" for="c-kind">Soort<select id="c-kind">' + optList(KINDS, c.kind || 'Prospect') + '</select></label>' +
       '<label class="f" for="c-stage">Fase<select id="c-stage">' + optList(STAGES, c.stage) + '</select></label>' + dateField('c-next', 'Volgend contact', c.next) + dateField('c-birth', 'Verjaardag (optioneel)', c.birthday) +
       '<fieldset class="fs"><legend>Alleen voor klanten</legend>' + dateField('c-last', 'Laatste bestelling', c.lastOrder) + '<label class="f" for="c-cycle">Gemiddelde cyclus in dagen<input type="number" id="c-cycle" min="1" max="365" value="' + esc(c.cycle || '') + '"></label></fieldset>' +
-      '<fieldset class="fs"><legend>Alleen voor teamleden</legend>' + dateField('c-start', 'Startdatum', c.startDate) + '</fieldset>' + areaField('c-note', 'Notitie', c.note) + campInfoHtml(c) + btns('contact-save', d.id, 'contact-del');
+      '<fieldset class="fs"><legend>Alleen voor teamleden</legend>' + dateField('c-start', 'Startdatum', c.startDate) + '</fieldset>' + areaField('c-note', 'Notitie', c.note) + orgYlHtml(c) + campInfoHtml(c) + btns('contact-save', d.id, 'contact-del');
   }
   if (d.type === 'event') {
     const e = isNew ? {} : state.docs[d.id] || {};
@@ -1122,33 +1124,16 @@ function orgDate(v) {
   if ((m = v.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/))) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
   return '';
 }
-function orgPlan(rows) {
-  const have = new Map(allContacts().map(c => [normName(c.name), c])), fresh = [], upd = [], seen = new Set();
-  rows.forEach(r => { const k = normName(r.name); if (!k || seen.has(k)) return; seen.add(k); (have.has(k) ? upd : fresh).push({ r, c: have.get(k) }); });
-  return { fresh, upd };
-}
-function orgSave(d) {
-  if (!d || d.type !== 'orgreview') return; const p = orgPlan(d.rows || []), now = new Date().toISOString();
-  p.fresh.forEach(x => save(uid('contact'), { name: x.r.name, kind: 'Teamlid', stage: 'Gestart', next: '', birthday: '', lastOrder: x.r.lastOrder || '', cycle: '', startDate: '', note: '', info: x.r.info && x.r.info.length ? x.r.info : undefined, org: true, updatedAt: now }));
-  p.upd.forEach(x => { if (x.r.info && x.r.info.length) save(x.c.id, Object.assign({}, state.docs[x.c.id], { info: x.r.info, lastOrder: x.r.lastOrder || (state.docs[x.c.id] || {}).lastOrder || '' })); });
-  const ib = d.inboxId; state.dialog = null; state.view = 'mensen'; state.sub.mensen = 'Teamleden'; state.orgq = ''; render(); window.scrollTo(0, 0);
-  toast(p.fresh.length + ' toegevoegd' + (p.upd.length ? ', ' + p.upd.length + ' bijgewerkt' : '') + '.');
-  if (ib && window.__lumoWeb && window.__lumoWeb.inbox) window.__lumoWeb.inbox.remove(ib).then(() => webInboxLoad(true), () => {});
-}
-function orgListHtml() {
-  const all = byKind('Teamlid'), q = normName(state.orgq || ''), hit = q ? all.filter(c => normName(c.name + ' ' + (c.info || []).map(x => x.v).join(' ')).includes(q)) : all, cap = 40;
-  if (!all.length) return '<p class="muted">Nog geen teamleden. Importeer je organisatie uit het Virtual Office, of voeg een contact toe met soort Teamlid.</p>';
-  return '<p class="small muted">' + hit.length + ' van ' + all.length + ' mensen' + (hit.length > cap ? '. Zoek op naam om de rest te vinden.' : '') + '</p><div class="board">' + hit.slice(0, cap).map(contactCard).join('') + '</div>';
-}
 function orgDialog(d) {
   if (d.type === 'orgpaste') return '<h2>Mijn organisatie importeren</h2><p class="small muted">Plak de tabel uit het Virtual Office of laad het CSV-bestand. Iedereen komt bij Mensen onder Teamleden, met sponsor, enroller en gsm erbij. Wie er al staat wordt bijgewerkt.</p>' +
     areaField('org-paste', 'Plak de lijst', d.prefill || '', 'Met kolomkoppen, bijvoorbeeld Name, Sponsor Name, Enroller Name, Phone.') +
     '<div><label class="btn ghost small" for="orgfile" style="cursor:pointer">CSV of tekstbestand laden</label><input id="orgfile" class="sr" type="file" accept=".txt,.csv,.tsv,text/plain,text/csv" data-change="org-file"></div>' +
     '<div class="row"><button class="btn" data-act="org-parse">Controleren</button><button class="btn ghost" data-act="overlay-close">Annuleer</button></div>';
   if (d.type === 'orgreview') {
-    const p = orgPlan(d.rows || []);
-    return '<h2>Mijn organisatie</h2><p><b>' + p.fresh.length + '</b> nieuw, <b>' + p.upd.length + '</b> staan er al' + (d.hasHeader ? ' en krijgen hun gegevens bijgewerkt.' : '. Zonder kolomkoppen kan ik geen sponsor of gsm bewaren.') + '</p>' +
-      (p.fresh.length ? '<p class="small muted">Bijvoorbeeld: ' + esc(p.fresh.slice(0, 3).map(x => x.r.name).join(', ')) + (p.fresh.length > 3 ? ' en ' + (p.fresh.length - 3) + ' anderen' : '') + '</p>' : '') +
+    const p = orgPlan(d.rows || []), first = d.rows && d.rows[0] ? d.rows[0].name : '';
+    return '<h2>Mijn organisatie</h2><p><b>' + (p.fresh.length + p.upd.length) + '</b> mensen in het rapport: <b>' + p.klanten + '</b> klanten (waarvan <b>' + p.lr + '</b> met Loyalty Rewards) en <b>' + p.team + '</b> teamleden.</p>' +
+      '<p class="small muted">' + p.fresh.length + ' nieuw, ' + p.upd.length + ' staan er al en worden bijgewerkt' + (p.stale.length ? '. ' + p.stale.length + ' oude regels (met een verkeerde naam uit een eerdere import) worden vervangen' : '') + '.' + (first ? ' Eerste naam in de lijst: ' + esc(first) + '.' : '') + '</p>' +
+      (d.hasHeader ? '' : '<p class="small">Zonder kolomkoppen kan ik geen niveau, PV of Loyalty Rewards bewaren.</p>') +
       '<div class="row"><button class="btn" data-act="org-save">Toevoegen</button><button class="btn ghost" data-act="overlay-close">Annuleer</button></div>';
   }
   return '';
@@ -1161,11 +1146,12 @@ function campParseRows(text) {
   if (hi < 0 && rows.length > 1 && isHead(rows[0])) hi = 0;
   const header = hi >= 0 ? rows[hi] : null;
   const out = [], seen = new Set();
+  const nameCol = header ? header.findIndex(h => /^(account\s*name|name|naam|member\s*name|full\s*name)$/i.test(String(h).trim())) : -1;
   rows.forEach((cells, ri) => {
     if (header && ri <= hi) return;
-    const name = campNameOf(cells);
+    const name = nameCol >= 0 && cells[nameCol] ? String(cells[nameCol]).replace(/\s+/g, ' ').trim().slice(0, 80) : campNameOf(cells);
     if (!name || /^(naam|name|member|lid|brand partner|id|downline|rank|status)$/i.test(name)) return;
-    const k = normName(name); if (!k || seen.has(k)) return; seen.add(k); out.push({ name, cells, info: campInfoOf(header, cells, name) });
+    const k = normName(name); if (!k || seen.has(k)) return; seen.add(k); out.push({ name, cells, idx: ri - (hi >= 0 ? hi : -1), info: campInfoOf(header, cells, name) });
   });
   return { header, rows: out, hasData: out.some(r => r.cells.filter(Boolean).length > 1) };
 }
@@ -1220,6 +1206,7 @@ function campAddPeople(id, items, pickedIds, fromReview, inboxId) {
 
 /* ---------- acties ---------- */
 async function campAct(a, d, el) {
+  if (String(a).indexOf('org-') === 0 && orgAct(a, d)) return true;
   const val2 = id => { const e = $('#' + id); return e ? e.value : ''; };
   if (a === 'camp-open') { state.view = 'team'; state.sub.team = 'Campagnes'; state.camp.id = d.id; state.camp.month = null; state.camp.filter = 'Alles'; state.camp.q = ''; state.camp.limit = 30; state.dialog = null; render(); window.scrollTo(0, 0); return true; }
   if (a === 'camp-back') { state.camp.id = null; render(); return true; }
@@ -1316,12 +1303,142 @@ async function campAct(a, d, el) {
   if (a === 'org-parse') {
     const text = val('org-paste'); if (!text.trim()) { toast('Plak eerst de lijst of laad een bestand.'); return true; }
     const parsed = campParseRows(text); if (!parsed.rows.length) { toast('Ik vond geen namen. Controleer de lijst.'); return true; }
-    state.dialog = { type: 'orgreview', rows: parsed.rows.map(r => ({ name: r.name, info: r.info, lastOrder: orgDate(((r.info || []).find(x => /last order|laatste bestelling/i.test(x.k)) || {}).v) })), inboxId: state.dialog && state.dialog.inboxId, hasHeader: !!parsed.header }; render(); return true;
+    state.dialog = { type: 'orgreview', rows: parsed.rows.map(r => ({ name: r.name, info: orgExtra(parsed.header, r.cells, r.name), yl: orgYL(parsed.header, r.cells, r.idx) })), inboxId: state.dialog && state.dialog.inboxId, hasHeader: !!parsed.header }; render(); return true;
   }
   if (a === 'org-save') { orgSave(state.dialog); return true; }
   if (a === 'camp-msg-std') { const dl = state.dialog; if (!dl || dl.type !== 'campmsg') return true; const c = campById(dl.camp), p = campDoc(dl.camp).people.find(x => x.id === dl.id); if (!c || !p) return true; const st = c.steps[campStepIdx(c, p)]; dl.text = campFirstStepMsg(c, p, { msg: campTpl(c, st) }) || st.hint || ''; const o = $('#campmsgOut'); if (o) o.innerHTML = md(dl.text); return true; }
   if (a === 'camp-msg-again') { campMsgRun(); return true; }
   if (a === 'camp-msg-copy') { if (state.dialog && state.dialog.text) copyText(state.dialog.text); return true; }
+  return false;
+}
+
+/* ---------- organisatie: klanten, teamleden en netwerk (uit het Downline Viewer-rapport) ---------- */
+const orgNum = v => { const n = parseFloat(String(v == null ? '' : v).replace(/\s/g, '').replace(',', '.')); return isFinite(n) ? n : 0; };
+const orgKey = h => String(h || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const ORG_MAPPED = ['level', 'pv', 'ogv', 'pgv', 'mwo', 'autoshipday', 'commissionqualified', 'accountstatus', 'customertype', 'activationdate', 'addresscity', 'phone', 'accountname', 'name', 'naam'];
+function orgYL(header, cells, idx) {
+  const m = {}; (header || []).forEach((h, i) => { const k = orgKey(h); if (k && m[k] === undefined) m[k] = String(cells[i] == null ? '' : cells[i]).trim(); });
+  const g = (...ks) => { for (const k of ks) if (m[k]) return m[k]; return ''; };
+  const au = g('autoshipday', 'autoship', 'loyaltyrewardsday');
+  return { i: idx || 0, lvl: Math.round(orgNum(g('level'))), pv: orgNum(g('pv')), ogv: orgNum(g('ogv')), pgv: orgNum(g('pgv')), mwo: g('mwo') === '' ? null : Math.round(orgNum(g('mwo'))), au: au && au !== '0' ? au : '', cq: /^(1|true|yes|y|ja|x)$/i.test(g('commissionqualified')), st: g('accountstatus'), ct: g('customertype'), act: orgDate(g('activationdate')), city: g('addresscity'), phone: g('phone') };
+}
+function orgExtra(header, cells, name) {
+  const nm = normName(name), out = [];
+  (header || []).forEach((h, i) => { const k = String(h || '').trim(), v = String(cells[i] == null ? '' : cells[i]).trim(); if (!k || !v || normName(v) === nm || ORG_MAPPED.includes(orgKey(k))) return; out.push({ k: k.slice(0, 40), v: v.slice(0, 120) }); });
+  return out.slice(0, 12);
+}
+// Het rapport staat in boomvolgorde: de ouder van iemand op niveau N is de laatste persoon erboven op niveau N-1.
+function orgTreeOf(items, lvlOf) {
+  const kids = items.map(() => 0), par = items.map(() => -1), stack = [];
+  items.forEach((it, i) => { const l = lvlOf(it); if (!l) return; while (stack.length && lvlOf(items[stack[stack.length - 1]]) >= l) stack.pop(); if (stack.length) { par[i] = stack[stack.length - 1]; kids[par[i]]++; } stack.push(i); });
+  return { kids, par };
+}
+function orgPlan(rows) {
+  const have = new Map(allContacts().map(c => [normName(c.name), c])), seen = new Set(), fresh = [], upd = [];
+  const tree = orgTreeOf(rows, r => r.yl && r.yl.lvl);
+  rows.forEach((r, i) => {
+    const k = normName(r.name); if (!k || seen.has(k)) return; seen.add(k);
+    const c = have.get(k), kids = tree.kids[i], y = r.yl || {}, auto = y.cq || kids > 0 ? 'Teamlid' : 'Klant';
+    const kind = c && (!c.org || c.kindSet) ? c.kind : auto;
+    (c ? upd : fresh).push({ r, c, kind, kids });
+  });
+  const stale = allContacts().filter(c => c.org && !c.yl && !seen.has(normName(c.name)));
+  const all = fresh.concat(upd), cnt = kd => all.filter(x => x.kind === kd).length;
+  return { fresh, upd, stale, klanten: cnt('Klant'), team: cnt('Teamlid'), lr: all.filter(x => x.kind === 'Klant' && x.r.yl && x.r.yl.au).length };
+}
+function orgSave(d) {
+  if (!d || d.type !== 'orgreview') return; const p = orgPlan(d.rows || []), now = new Date().toISOString(), mk = todayKey().slice(0, 7);
+  const doc = x => {
+    const prev = x.c ? (state.docs[x.c.id] || {}) : {}, hist = Object.assign({}, prev.hist || {}), y = Object.assign({}, x.r.yl, { kids: x.kids });
+    hist[mk] = { pv: y.pv, ogv: y.ogv }; Object.keys(hist).sort().slice(0, -12).forEach(k => delete hist[k]);
+    const base = x.c ? prev : { stage: 'Gestart', next: '', birthday: '', lastOrder: '', cycle: '', startDate: '', note: '' };
+    return Object.assign({}, base, { name: x.c ? prev.name : x.r.name, kind: x.kind, org: x.c ? prev.org : true, yl: y, hist, info: x.r.info && x.r.info.length ? x.r.info : prev.info, updatedAt: now });
+  };
+  p.stale.forEach(c => remove(c.id));
+  p.fresh.forEach(x => save(uid('contact'), doc(x)));
+  p.upd.forEach(x => save(x.c.id, doc(x)));
+  const ib = d.inboxId; state.dialog = null; state.view = 'mensen'; state.sub.mensen = p.team > p.klanten ? 'Teamleden' : 'Klanten'; state.orgq = ''; render(); window.scrollTo(0, 0);
+  toast(p.fresh.length + ' toegevoegd' + (p.upd.length ? ', ' + p.upd.length + ' bijgewerkt' : '') + (p.stale.length ? ', ' + p.stale.length + ' oude regels opgeruimd' : '') + '.');
+  if (ib && window.__lumoWeb && window.__lumoWeb.inbox) window.__lumoWeb.inbox.remove(ib).then(() => webInboxLoad(true), () => {});
+}
+const orgAgo = m => m == null ? '' : m === 0 ? 'deze maand' : m === 1 ? '1 maand geleden' : m + ' maanden geleden';
+const orgFmt = n => (Math.round(n * 10) / 10).toLocaleString('nl-BE');
+function orgAvg(c) { const v = Object.keys(c.hist || {}).map(k => c.hist[k].pv || 0); return v.length ? { avg: v.reduce((a, b) => a + b, 0) / v.length, n: v.length } : null; }
+function orgBadges(c) {
+  const y = c.yl || {}; let h = '';
+  h += y.au ? pill('Loyalty Rewards · dag ' + y.au, 'lr') : (c.kind === 'Klant' ? pill('Geen Loyalty Rewards') : '');
+  if (c.kind === 'Teamlid') h += pill('Teamlid');
+  if (y.lvl) h += pill('Niveau ' + y.lvl);
+  if (y.cq) h += pill('Commissie');
+  return h;
+}
+function orgCard(c) {
+  const y = c.yl || {}, a = orgAvg(c);
+  const l1 = [y.mwo != null ? 'Laatst besteld: <b>' + orgAgo(y.mwo) + '</b>' : '', 'PV <b>' + orgFmt(y.pv || 0) + '</b>', a ? 'Gem. PV <b>' + orgFmt(a.avg) + '</b> (' + a.n + ' mnd)' : ''].filter(Boolean).join(' · ');
+  const l2 = c.kind === 'Teamlid' ? '<p class="small">OGV <b>' + orgFmt(y.ogv || 0) + '</b> · PGV <b>' + orgFmt(y.pgv || 0) + '</b> · Direct <b>' + (y.kids || 0) + '</b></p>' : '';
+  return '<div class="contact org"><div class="row"><span class="nm">' + esc(c.name) + '</span></div><div class="row" style="gap:6px;flex-wrap:wrap">' + orgBadges(c) + '</div>' +
+    '<p class="small">' + l1 + '</p>' + l2 + (y.phone ? '<p class="small"><a href="tel:' + esc(String(y.phone).replace(/[^\d+]/g, '')) + '">' + esc(y.phone) + '</a>' + (y.city ? ' · ' + esc(y.city) : '') + '</p>' : '') +
+    '<div class="row"><span class="spacer"></span><button class="btn ghost small" data-act="contact-edit" data-id="' + c.id + '">Details</button></div></div>';
+}
+const ORG_FILTERS = { Klant: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'], Teamlid: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'] };
+function orgListHtml(kind) {
+  kind = kind || (state.sub.mensen === 'Klanten' ? 'Klant' : 'Teamlid');
+  const all = byKind(kind), q = normName(state.orgq || ''), f = state.orgf || 'Alles', s = state.orgsort || 'Naam';
+  let hit = all.filter(c => !q || normName(c.name + ' ' + (c.yl ? c.yl.phone || '' : '') + ' ' + (c.info || []).map(x => x.v).join(' ')).includes(q));
+  hit = hit.filter(c => f === 'Alles' || (f === 'Loyalty Rewards' && c.yl && c.yl.au) || (f === 'Geen LR' && !(c.yl && c.yl.au)) || (f === 'Lang niet besteld' && c.yl && c.yl.mwo != null && c.yl.mwo >= 3));
+  const mw = c => c.yl && c.yl.mwo != null ? c.yl.mwo : -1, pv = c => c.yl ? c.yl.pv || 0 : 0, og = c => c.yl ? c.yl.ogv || 0 : 0;
+  hit.sort(s === 'Laatst besteld (oudste eerst)' ? (a, b) => mw(b) - mw(a) || a.name.localeCompare(b.name) : s === 'PV (hoog naar laag)' ? (a, b) => pv(b) - pv(a) : s === 'OGV (hoog naar laag)' ? (a, b) => og(b) - og(a) : (a, b) => (a.name || '').localeCompare(b.name || ''));
+  const lr = all.filter(c => c.yl && c.yl.au).length, cap = 40;
+  if (!all.length) return '<p class="muted">' + (kind === 'Klant' ? 'Nog geen klanten.' : 'Nog geen teamleden.') + ' Importeer je organisatie uit het Virtual Office, of voeg een contact toe.</p>';
+  return '<p class="small muted">' + hit.length + ' van ' + all.length + (kind === 'Klant' ? ' klanten · ' + lr + ' met Loyalty Rewards · ' + (all.length - lr) + ' zonder' : ' teamleden · ' + lr + ' met Loyalty Rewards') + (hit.length > cap ? '. Zoek of filter om de rest te zien.' : '') + '</p><div class="board">' + hit.slice(0, cap).map(c => c.yl ? orgCard(c) : contactCard(c)).join('') + '</div>';
+}
+function orgPageHtml(kind) {
+  state.orgkind = kind; const all = byKind(kind), f = state.orgf || 'Alles';
+  const sorts = kind === 'Klant' ? ['Naam', 'Laatst besteld (oudste eerst)', 'PV (hoog naar laag)'] : ['Naam', 'Laatst besteld (oudste eerst)', 'PV (hoog naar laag)', 'OGV (hoog naar laag)'];
+  return '<div class="row"><span class="spacer"></span><button class="btn" data-act="org-import">Organisatie importeren</button></div>' +
+    (all.some(c => c.yl) ? '<div class="seg" role="group" aria-label="Filter">' + ORG_FILTERS[kind].map(x => '<button class="chip" data-act="org-filter" data-f="' + x + '" aria-pressed="' + (f === x) + '">' + x + '</button>').join('') + '</div>' +
+      '<div class="row"><label class="f" style="flex:1"><span class="sr">Zoek op naam</span><input type="search" data-input="orgsearch" placeholder="Zoek op naam, gsm of plaats…" value="' + esc(state.orgq || '') + '"></label>' +
+      '<label class="f"><span class="sr">Sorteren</span><select data-change="org-sort">' + sorts.map(x => '<option' + (x === (state.orgsort || 'Naam') ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></label></div>' : '') +
+    '<div id="orglist">' + orgListHtml(kind) + '</div>';
+}
+/* ---------- netwerk (zoals de organisatieweergave in het Virtual Office) ---------- */
+function orgNodes() {
+  const nodes = allContacts().filter(c => c.yl && c.yl.lvl).sort((a, b) => a.yl.i - b.yl.i), kids = new Map(), roots = [], stack = [];
+  nodes.forEach(n => { const l = n.yl.lvl; while (stack.length && stack[stack.length - 1].yl.lvl >= l) stack.pop(); const p = stack[stack.length - 1]; if (p) { if (!kids.has(p.id)) kids.set(p.id, []); kids.get(p.id).push(n); } else roots.push(n); stack.push(n); });
+  const sum = new Map(), calc = n => { if (sum.has(n.id)) return sum.get(n.id); const s = { n: 0, pv: 0, lr: 0 }; (kids.get(n.id) || []).forEach(k => { const t = calc(k); s.n += 1 + t.n; s.pv += (k.yl.pv || 0) + t.pv; s.lr += (k.yl.au ? 1 : 0) + t.lr; }); sum.set(n.id, s); return s; };
+  nodes.forEach(calc);
+  return { nodes, kids, roots, sum };
+}
+function orgNetRow(n, g, flat) {
+  const y = n.yl, k = g.kids.get(n.id) || [], open = !!(state.netOpen || {})[n.id], s = g.sum.get(n.id) || { n: 0, pv: 0, lr: 0 };
+  return '<div class="net-node l' + Math.min(y.lvl, 8) + '" style="margin-left:' + (flat ? 0 : (y.lvl - 1) * 14) + 'px"><div class="row" style="gap:6px;flex-wrap:nowrap">' +
+    (k.length && !flat ? '<button class="net-tog" data-act="org-net" data-id="' + n.id + '" aria-expanded="' + open + '" aria-label="' + (open ? 'Klap in' : 'Klap uit') + ' ' + esc(n.name) + '">' + (open ? '−' : '+') + '</button>' : '<span class="net-tog sp"></span>') +
+    '<button class="net-name" data-act="contact-edit" data-id="' + n.id + '">' + esc(n.name) + '</button><span class="spacer"></span>' + (y.au ? pill('LR', 'lr') : '') + (n.kind === 'Teamlid' ? pill('Team') : '') + '</div>' +
+    '<p class="small muted" style="margin:2px 0 0 30px">Niveau ' + y.lvl + ' · PV <b>' + orgFmt(y.pv || 0) + '</b>' + (n.kind === 'Teamlid' || y.ogv ? ' · OGV <b>' + orgFmt(y.ogv || 0) + '</b>' : '') + (y.mwo != null ? ' · ' + orgAgo(y.mwo) : '') + (k.length ? ' · groep ' + (s.n + 0) + ' pers.' : '') + '</p></div>';
+}
+function orgNetListHtml() {
+  const g = orgNodes(), q = normName(state.netq || '');
+  if (q) { const hit = g.nodes.filter(n => normName(n.name).includes(q)); return '<p class="small muted">' + hit.length + ' gevonden</p>' + hit.slice(0, 60).map(n => orgNetRow(n, g, true)).join(''); }
+  const out = [], walk = n => { out.push(orgNetRow(n, g, false)); if ((state.netOpen || {})[n.id]) (g.kids.get(n.id) || []).forEach(walk); };
+  g.roots.forEach(walk); return out.join('');
+}
+function orgNetHtml() {
+  const g = orgNodes(); if (!g.nodes.length) return '<div class="card soft"><p>Nog geen netwerk. Importeer je organisatie uit het Virtual Office (Rapport uit Gmail of CSV). Het rapport moet de kolom Level bevatten.</p><div class="row"><button class="btn" data-act="org-import">Organisatie importeren</button></div></div>';
+  const lr = g.nodes.filter(n => n.yl.au).length, team = g.nodes.filter(n => n.kind === 'Teamlid').length, pv = g.nodes.reduce((a, n) => a + (n.yl.pv || 0), 0), l1 = g.roots.length;
+  return '<div class="card soft"><div class="row" style="gap:14px;flex-wrap:wrap"><span><b>' + g.nodes.length + '</b><br><span class="small muted">mensen</span></span><span><b>' + l1 + '</b><br><span class="small muted">frontline</span></span><span><b>' + team + '</b><br><span class="small muted">teamleden</span></span><span><b>' + lr + '</b><br><span class="small muted">met LR</span></span><span><b>' + orgFmt(pv) + '</b><br><span class="small muted">PV totaal</span></span></div></div>' +
+    '<div class="row"><label class="f" style="flex:1"><span class="sr">Zoek in je netwerk</span><input type="search" data-input="netsearch" placeholder="Zoek op naam…" value="' + esc(state.netq || '') + '"></label><button class="btn ghost small" data-act="org-net-all" data-o="1">Alles open</button><button class="btn ghost small" data-act="org-net-all" data-o="0">Dicht</button></div>' +
+    '<div id="netlist" class="net">' + orgNetListHtml() + '</div>';
+}
+function orgYlHtml(c) {
+  const y = c && c.yl; if (!y) return ''; const a = orgAvg(c), rows = [['Loyalty Rewards', y.au ? 'Ja, dag ' + y.au : 'Nee'], ['Laatst besteld', y.mwo != null ? orgAgo(y.mwo) : '-'], ['PV deze maand', orgFmt(y.pv || 0)], ['Gemiddelde PV', a ? orgFmt(a.avg) + ' (over ' + a.n + ' maand' + (a.n === 1 ? '' : 'en') + ')' : '-']];
+  if (c.kind === 'Teamlid') rows.push(['OGV', orgFmt(y.ogv || 0)], ['PGV', orgFmt(y.pgv || 0)], ['Direct in je lijn', String(y.kids || 0)]);
+  if (y.lvl) rows.push(['Niveau', String(y.lvl)]); if (y.act) rows.push(['Actief sinds', fmtDate(y.act)]); if (y.phone) rows.push(['Telefoon', y.phone]); if (y.city) rows.push(['Plaats', y.city]);
+  return '<details class="pinfo" open><summary>Cijfers uit je rapport</summary><dl>' + rows.map(r => '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd>').join('') + '</dl></details>';
+}
+function orgAct(a, d) {
+  if (a === 'org-filter') { state.orgf = d.f; render(); return true; }
+  if (a === 'org-net') { state.netOpen = Object.assign({}, state.netOpen || {}); if (state.netOpen[d.id]) delete state.netOpen[d.id]; else state.netOpen[d.id] = true; render(); return true; }
+  if (a === 'org-net-all') { const o = {}; if (d.o === '1') orgNodes().kids.forEach((v, k) => { o[k] = true; }); state.netOpen = o; render(); return true; }
   return false;
 }
 
@@ -1577,7 +1694,7 @@ async function onAct(a, el, ev) {
   if (a === 'contact-save') {
     const name = val('c-name').trim(); if (!name) { toast('Vul een naam in.'); return; }
     const id = d.id === 'new' ? uid('contact') : d.id;
-    return closeAnd(() => save(id, { name, kind: val('c-kind'), stage: val('c-stage'), next: val('c-next'), birthday: val('c-birth'), lastOrder: val('c-last'), cycle: val('c-cycle'), startDate: val('c-start'), note: val('c-note').trim(), info: (state.docs[id] || {}).info, org: (state.docs[id] || {}).org, updatedAt: new Date().toISOString() }));
+    return closeAnd(() => save(id, { name, kind: val('c-kind'), stage: val('c-stage'), next: val('c-next'), birthday: val('c-birth'), lastOrder: val('c-last'), cycle: val('c-cycle'), startDate: val('c-start'), note: val('c-note').trim(), info: (state.docs[id] || {}).info, org: (state.docs[id] || {}).org, yl: (state.docs[id] || {}).yl, hist: (state.docs[id] || {}).hist, kindSet: (state.docs[id] || {}).kindSet || ((state.docs[id] || {}).org && val('c-kind') !== (state.docs[id] || {}).kind) || undefined, updatedAt: new Date().toISOString() }));
   }
   if (a === 'contact-del') { remove(d.id); state.dialog = null; render(); toast('Contact verwijderd.'); return; }
   /* workshops */
@@ -1728,6 +1845,7 @@ document.addEventListener('change', async e => {
   if (k === 'camp-kind') { const dlg = state.dialog; if (dlg && dlg.type === 'campedit') { dlg.draft = campReadDraft(dlg); dlg.draft.kind = el.value; render(); } return; }
   if (k === 'camp-task') { const id = state.camp.id, doc = clone(campDoc(id)); doc.tasks = doc.tasks || {}; if (el.checked) doc.tasks[el.dataset.id] = new Date().toISOString(); else delete doc.tasks[el.dataset.id]; saveCamp(id, doc); render(); return; }
   if (k === 'camp-share') { const id = el.dataset.id, doc = clone(campDoc(id)); doc.share = el.value; save('camp-' + id, doc); render(); toast(el.value === 'off' ? 'Je deelt niets meer voor deze campagne.' : 'Gedeeld met je upline.'); return; }
+  if (k === 'org-sort') { state.orgsort = el.value; render(); return; }
   if (k === 'org-file') { const f = el.files && el.files[0]; if (!f) return; if (f.size > 1500000) { toast('Dit bestand is te groot.'); return; } f.arrayBuffer().then(buf => { let t = new TextDecoder('utf-8').decode(buf); if (t.includes('\uFFFD')) t = new TextDecoder('windows-1252').decode(buf); const ta = $('#org-paste'); if (ta) { ta.value = t.replace(/^\uFEFF/, ''); toast('Bestand geladen. Kies Controleren.'); } }, () => toast('Het bestand kon niet worden gelezen.')); return; }
   if (k === 'camp-file') { const f = el.files && el.files[0]; if (!f) return; if (f.size > 500000) { toast('Dit bestand is te groot.'); return; } const r = new FileReader(); r.onload = () => { const ta = $('#cp-paste'); if (ta) ta.value = String(r.result || '').slice(0, 60000); }; r.onerror = () => toast('Het bestand kon niet worden gelezen.'); r.readAsText(f); return; }
   if (k === 'fig-file' || k === 'lib-file') {
@@ -1747,6 +1865,7 @@ document.addEventListener('change', async e => {
 document.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset && el.dataset.input === 'orgsearch') { state.orgq = el.value; const box = $('#orglist'); if (box) box.innerHTML = orgListHtml(); return; }
+  if (el.dataset && el.dataset.input === 'netsearch') { state.netq = el.value; const box = $('#netlist'); if (box) box.innerHTML = orgNetListHtml(); return; }
   if (el.dataset && el.dataset.input === 'campsearch') { state.camp.q = el.value; state.camp.limit = 30; const c = campById(state.camp.id), box = $('#camplist'); if (c && box) box.innerHTML = campBody(c); return; }
   if (el.dataset && el.dataset.input === 'libsearch') {
     state.libSearch = el.value; const q = state.libSearch.toLowerCase(), cat = state.libCat;
