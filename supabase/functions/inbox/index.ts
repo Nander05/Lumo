@@ -13,6 +13,7 @@ const sha = async (t: string) => Array.from(new Uint8Array(await crypto.subtle.d
 const okHost = (h: string) => !/^(\d{1,3}\.){3}\d{1,3}$/.test(h) && !h.includes(':') && h !== 'localhost' && !/\.(local|internal|localhost)$/.test(h) && h.includes('.');
 async function fetchReport(link: string): Promise<{ text: string; name?: string } | { error: string; status?: number; type?: string }> {
   let u: URL; try { u = new URL(link); } catch { return { error: 'url' }; }
+  if (u.protocol === 'http:') u.protocol = 'https:';
   if (link.length > 12000 || u.protocol !== 'https:' || !(u.hostname === 'youngliving.com' || u.hostname.endsWith('.youngliving.com'))) return { error: 'host' };
   let res: Response | null = null;
   for (let i = 0; i < 6; i++) {
