@@ -1121,7 +1121,7 @@ function campInfoHtml(p) {
 function orgDate(v) {
   v = String(v || '').trim(); let m;
   if ((m = v.match(/^(\d{4})-(\d{2})-(\d{2})/))) return m[1] + '-' + m[2] + '-' + m[3];
-  if ((m = v.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/))) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  if ((m = v.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/))) { const a = +m[1], b = +m[2], us = v.indexOf('/') >= 0 && a <= 12 && !(b <= 12 && a > 12); const mo = us ? a : b, da = us ? b : a; if (mo > 12 || mo < 1 || da > 31 || da < 1) return ''; return m[3] + '-' + ('0' + mo).slice(-2) + '-' + ('0' + da).slice(-2); } // met schuine strepen: Amerikaans (maand/dag/jaar), zoals het Virtual Office
   return '';
 }
 function orgDialog(d) {
@@ -1376,7 +1376,7 @@ function orgBadges(c) {
 function orgCard(c) {
   const y = c.yl || {}, a = orgAvg(c);
   const l1 = [y.mwo != null ? 'Laatst besteld: <b>' + orgAgo(y.mwo) + '</b>' : '', 'PV <b>' + orgFmt(y.pv || 0) + '</b>', a ? 'Gem. PV <b>' + orgFmt(a.avg) + '</b> (' + a.n + ' mnd)' : ''].filter(Boolean).join(' · ');
-  const l2 = c.kind === 'Teamlid' ? '<p class="small">OGV <b>' + orgFmt(y.ogv || 0) + '</b> · PGV <b>' + orgFmt(y.pgv || 0) + '</b> · Direct <b>' + (y.kids || 0) + '</b></p>' : '';
+  const l2 = c.kind === 'Teamlid' ? '<p class="small">OGV <b>' + orgFmt(y.ogv || 0) + '</b> · PGV <b>' + orgFmt(y.pgv || 0) + '</b>' + (y.i != null ? ' · Direct <b>' + (y.kids || 0) + '</b>' : '') + '</p>' : '';
   return '<div class="contact org"><div class="row"><span class="nm">' + esc(c.name) + '</span></div><div class="row" style="gap:6px;flex-wrap:wrap">' + orgBadges(c) + '</div>' +
     '<p class="small">' + l1 + '</p>' + l2 + (y.phone ? '<p class="small"><a href="tel:' + esc(String(y.phone).replace(/[^\d+]/g, '')) + '">' + esc(y.phone) + '</a>' + (y.city ? ' · ' + esc(y.city) : '') + '</p>' : '') +
     '<div class="row"><button class="btn ghost small" data-act="org-kind" data-id="' + c.id + '" data-k="' + (c.kind === 'Teamlid' ? 'Klant' : 'Teamlid') + '">' + (c.kind === 'Teamlid' ? 'Terug naar klant' : 'Maak teamlid (actief business)') + '</button><span class="spacer"></span><button class="btn ghost small" data-act="contact-edit" data-id="' + c.id + '">Details</button></div></div>';
@@ -1408,7 +1408,7 @@ function orgNodes() {
   nodes.forEach(n => { const l = n.yl.lvl; while (stack.length && stack[stack.length - 1].yl.lvl >= l) stack.pop(); const p = stack[stack.length - 1]; if (p) { if (!kids.has(p.id)) kids.set(p.id, []); kids.get(p.id).push(n); } else roots.push(n); stack.push(n); });
   const sum = new Map(), calc = n => { if (sum.has(n.id)) return sum.get(n.id); const s = { n: 0, pv: 0, lr: 0 }; (kids.get(n.id) || []).forEach(k => { const t = calc(k); s.n += 1 + t.n; s.pv += (k.yl.pv || 0) + t.pv; s.lr += (k.yl.au ? 1 : 0) + t.lr; }); sum.set(n.id, s); return s; };
   nodes.forEach(calc);
-  return { nodes, kids, roots, sum };
+  return { nodes, kids, roots, sum, ordered: nodes.every(n => n.yl.i != null) };
 }
 function orgNetRow(n, g, flat) {
   const y = n.yl, k = g.kids.get(n.id) || [], open = !!(state.netOpen || {})[n.id], s = g.sum.get(n.id) || { n: 0, pv: 0, lr: 0 };
@@ -1420,19 +1420,20 @@ function orgNetRow(n, g, flat) {
 function orgNetListHtml() {
   const g = orgNodes(), q = normName(state.netq || '');
   if (q) { const hit = g.nodes.filter(n => normName(n.name).includes(q)); return '<p class="small muted">' + hit.length + ' gevonden</p>' + hit.slice(0, 60).map(n => orgNetRow(n, g, true)).join(''); }
+  if (!g.ordered) { const by = {}; g.nodes.forEach(n => { (by[n.yl.lvl] = by[n.yl.lvl] || []).push(n); }); return '<p class="small muted">De boomstructuur is nog niet beschikbaar voor deze lijst. Importeer je rapport één keer opnieuw (Mijn hele organisatie), dan zie je wie onder wie zit. Tot dan staat iedereen per niveau.</p>' + Object.keys(by).sort((a, b) => a - b).map(l => '<h3 style="margin:12px 0 4px">Niveau ' + l + ' <span class="small muted">(' + by[l].length + ')</span></h3>' + by[l].sort((a, b) => (b.yl.pv || 0) - (a.yl.pv || 0) || a.name.localeCompare(b.name)).slice(0, 80).map(n => orgNetRow(n, g, true)).join('')).join(''); }
   const out = [], walk = n => { out.push(orgNetRow(n, g, false)); if ((state.netOpen || {})[n.id]) (g.kids.get(n.id) || []).forEach(walk); };
   g.roots.forEach(walk); return out.join('');
 }
 function orgNetHtml() {
   const g = orgNodes(); if (!g.nodes.length) return '<div class="card soft"><p>Nog geen netwerk. Importeer je organisatie uit het Virtual Office (Rapport uit Gmail of CSV). Het rapport moet de kolom Level bevatten.</p><div class="row"><button class="btn" data-act="org-import">Organisatie importeren</button></div></div>';
   const lr = g.nodes.filter(n => n.yl.au).length, team = g.nodes.filter(n => n.kind === 'Teamlid').length, pv = g.nodes.reduce((a, n) => a + (n.yl.pv || 0), 0), l1 = g.roots.length;
-  return '<div class="card soft"><div class="row" style="gap:14px;flex-wrap:wrap"><span><b>' + g.nodes.length + '</b><br><span class="small muted">mensen</span></span><span><b>' + l1 + '</b><br><span class="small muted">frontline</span></span><span><b>' + team + '</b><br><span class="small muted">teamleden</span></span><span><b>' + lr + '</b><br><span class="small muted">met LR</span></span><span><b>' + orgFmt(pv) + '</b><br><span class="small muted">PV totaal</span></span></div></div>' +
+  return '<div class="card soft"><div class="row" style="gap:14px;flex-wrap:wrap"><span><b>' + g.nodes.length + '</b><br><span class="small muted">mensen</span></span><span><b>' + (g.ordered ? l1 : g.nodes.filter(n => n.yl.lvl === 1).length) + '</b><br><span class="small muted">niveau 1</span></span><span><b>' + team + '</b><br><span class="small muted">teamleden</span></span><span><b>' + lr + '</b><br><span class="small muted">met LR</span></span><span><b>' + orgFmt(pv) + '</b><br><span class="small muted">PV totaal</span></span></div></div>' +
     '<div class="row"><label class="f" style="flex:1"><span class="sr">Zoek in je netwerk</span><input type="search" data-input="netsearch" placeholder="Zoek op naam…" value="' + esc(state.netq || '') + '"></label><button class="btn ghost small" data-act="org-net-all" data-o="1">Alles open</button><button class="btn ghost small" data-act="org-net-all" data-o="0">Dicht</button></div>' +
     '<div id="netlist" class="net">' + orgNetListHtml() + '</div>';
 }
 function orgYlHtml(c) {
   const y = c && c.yl; if (!y) return ''; const a = orgAvg(c), rows = [['Loyalty Rewards', y.au ? 'Ja, dag ' + y.au : 'Nee'], ['Laatst besteld', y.mwo != null ? orgAgo(y.mwo) : '-'], ['PV deze maand', orgFmt(y.pv || 0)], ['Gemiddelde PV', a ? orgFmt(a.avg) + ' (over ' + a.n + ' maand' + (a.n === 1 ? '' : 'en') + ')' : '-']];
-  if (c.kind === 'Teamlid') rows.push(['OGV', orgFmt(y.ogv || 0)], ['PGV', orgFmt(y.pgv || 0)], ['Direct in je lijn', String(y.kids || 0)]);
+  if (c.kind === 'Teamlid') { rows.push(['OGV', orgFmt(y.ogv || 0)], ['PGV', orgFmt(y.pgv || 0)]); if (y.i != null) rows.push(['Direct in je lijn', String(y.kids || 0)]); }
   if (y.lvl) rows.push(['Niveau', String(y.lvl)]); if (y.act) rows.push(['Actief sinds', fmtDate(y.act)]); if (y.phone) rows.push(['Telefoon', y.phone]); if (y.city) rows.push(['Plaats', y.city]);
   return '<details class="pinfo" open><summary>Cijfers uit je rapport</summary><dl>' + rows.map(r => '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd>').join('') + '</dl></details>';
 }
