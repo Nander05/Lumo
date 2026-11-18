@@ -9,16 +9,16 @@ const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, 
 const sha = async (t: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)))).map((b) => b.toString(16).padStart(2, '0')).join('');
 
 // Haalt een rapport op via een downloadlink uit de mail (de link is voor Google's script te lang).
-// Alleen links van youngliving.com als start, alleen https, en geen interne adressen onderweg.
+// Alleen links van youngliving.com als start (het trackingdomein heeft geen geldig https-certificaat, dus de eerste stap mag http zijn),
+// daarna alleen https en geen interne adressen onderweg.
 const okHost = (h: string) => !/^(\d{1,3}\.){3}\d{1,3}$/.test(h) && !h.includes(':') && h !== 'localhost' && !/\.(local|internal|localhost)$/.test(h) && h.includes('.');
 async function fetchReport(link: string): Promise<{ text: string; name?: string } | { error: string; status?: number; type?: string }> {
   let u: URL; try { u = new URL(link); } catch { return { error: 'url' }; }
-  if (u.protocol === 'http:') u.protocol = 'https:';
-  if (link.length > 12000 || u.protocol !== 'https:' || !(u.hostname === 'youngliving.com' || u.hostname.endsWith('.youngliving.com'))) return { error: 'host' };
+  if (link.length > 12000 || (u.protocol !== 'https:' && u.protocol !== 'http:') || !(u.hostname === 'youngliving.com' || u.hostname.endsWith('.youngliving.com'))) return { error: 'host' };
   let res: Response | null = null;
   for (let i = 0; i < 6; i++) {
-    if (!okHost(u.hostname) || u.protocol !== 'https:') return { error: 'redirect' };
-    res = await fetch(u.toString(), { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (Lumo)' } });
+    if (!okHost(u.hostname) || (u.protocol !== 'https:' && i > 0)) return { error: 'redirect' };
+    try { res = await fetch(u.toString(), { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (Lumo)' } }); } catch (e) { return { error: 'fetch', status: 0, type: String(e).slice(0, 120) }; }
     const loc = res.headers.get('location');
     if (res.status >= 300 && res.status < 400 && loc) { try { u = new URL(loc, u); } catch { return { error: 'redirect' }; } continue; }
     break;
