@@ -1350,7 +1350,7 @@ function orgPlan(rows) {
 function orgSave(d) {
   if (!d || d.type !== 'orgreview') return; const p = orgPlan(d.rows || []), now = new Date().toISOString(), mk = todayKey().slice(0, 7);
   const doc = x => {
-    const prev = x.c ? (state.docs[x.c.id] || {}) : {}, hist = Object.assign({}, prev.hist || {}), y = Object.assign({}, x.r.yl, { kids: x.kids });
+    const prev = x.c ? (state.docs[x.c.id] || {}) : {}, hist = Object.assign({}, prev.hist || {}), y = Object.assign({}, x.r.yl, { kids: x.kids }, prev.yl && prev.yl.mid ? { mid: prev.yl.mid, pm: prev.yl.pm } : {});
     hist[mk] = { pv: y.pv, ogv: y.ogv }; Object.keys(hist).sort().slice(0, -12).forEach(k => delete hist[k]);
     const base = x.c ? prev : { stage: 'Gestart', next: '', birthday: '', lastOrder: '', cycle: '', startDate: '', note: '' };
     return Object.assign({}, base, { name: x.c ? prev.name : x.r.name, kind: x.kind, org: x.c ? prev.org : true, yl: y, hist, info: x.r.info && x.r.info.length ? x.r.info : prev.info, updatedAt: now });
@@ -1404,11 +1404,21 @@ function orgPageHtml(kind) {
 }
 /* ---------- netwerk (zoals de organisatieweergave in het Virtual Office) ---------- */
 function orgNodes() {
-  const nodes = allContacts().filter(c => c.yl && c.yl.lvl).sort((a, b) => a.yl.i - b.yl.i), kids = new Map(), roots = [], stack = [];
-  nodes.forEach(n => { const l = n.yl.lvl; while (stack.length && stack[stack.length - 1].yl.lvl >= l) stack.pop(); const p = stack[stack.length - 1]; if (p) { if (!kids.has(p.id)) kids.set(p.id, []); kids.get(p.id).push(n); } else roots.push(n); stack.push(n); });
+  const nodes = allContacts().filter(c => c.yl && c.yl.lvl), kids = new Map(), roots = [];
+  const linked = nodes.length > 0 && nodes.every(n => n.yl.mid && n.yl.pm !== undefined);
+  if (linked) {
+    /* echte boom: elke persoon wijst naar het lidnummer van zijn sponsor (yl.pm); niveau 1 wijst naar jou */
+    const byMid = new Map(); nodes.forEach(n => byMid.set(String(n.yl.mid), n));
+    nodes.forEach(n => { const p = n.yl.pm ? byMid.get(String(n.yl.pm)) : null; if (p) { if (!kids.has(p.id)) kids.set(p.id, []); kids.get(p.id).push(n); } else roots.push(n); });
+    const ord = (a, b) => (b.yl.ogv || 0) - (a.yl.ogv || 0) || (b.yl.pv || 0) - (a.yl.pv || 0) || (a.name || '').localeCompare(b.name || '');
+    kids.forEach(v => v.sort(ord)); roots.sort(ord);
+  } else {
+    const stack = []; nodes.sort((a, b) => a.yl.i - b.yl.i);
+    nodes.forEach(n => { const l = n.yl.lvl; while (stack.length && stack[stack.length - 1].yl.lvl >= l) stack.pop(); const p = stack[stack.length - 1]; if (p) { if (!kids.has(p.id)) kids.set(p.id, []); kids.get(p.id).push(n); } else roots.push(n); stack.push(n); });
+  }
   const sum = new Map(), calc = n => { if (sum.has(n.id)) return sum.get(n.id); const s = { n: 0, pv: 0, lr: 0 }; (kids.get(n.id) || []).forEach(k => { const t = calc(k); s.n += 1 + t.n; s.pv += (k.yl.pv || 0) + t.pv; s.lr += (k.yl.au ? 1 : 0) + t.lr; }); sum.set(n.id, s); return s; };
   nodes.forEach(calc);
-  return { nodes, kids, roots, sum, ordered: nodes.every(n => n.yl.i != null) };
+  return { nodes, kids, roots, sum, ordered: linked || nodes.every(n => n.yl.i != null) };
 }
 function orgNetRow(n, g, flat) {
   const y = n.yl, k = g.kids.get(n.id) || [], open = !!(state.netOpen || {})[n.id], s = g.sum.get(n.id) || { n: 0, pv: 0, lr: 0 };
