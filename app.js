@@ -392,7 +392,7 @@ function viewVandaag() {
     coachBtn('Avondcheck-in', 'Doe een korte avondcheck-in met me. Stel me één voor één drie korte vragen: wat ging goed, wat vroeg energie, en wat is morgen de eerste stap. Begin met de eerste vraag.') +
     coachBtn('Weekreview', 'Maak een weekreview: wat ging goed, wat bleef liggen, en een plan voor volgende week met maximaal drie prioriteiten. Gebruik mijn dagcijfers en pipeline.') + '</div>' +
     (state.brief ? '<div class="brief" id="brief" aria-live="polite">' + (state.brief.text ? md(state.brief.text) : '<p class="muted">De briefing wordt gemaakt…</p>') + '</div>' : '<p class="small muted">Eén klik geeft je een plan voor vandaag, op basis van je doelen, mensen en agenda.</p>') + '</section>' +
-    '<section class="card" aria-labelledby="h-dag"><h2 id="h-dag">Dagdoelen</h2>' + goals + '</section>' + (typeof webInboxBanner === 'function' ? webInboxBanner() : '') + campToday() +
+    '<section class="card" aria-labelledby="h-dag"><h2 id="h-dag">Dagdoelen</h2>' + goals + '</section>' + (typeof webInboxBanner === 'function' ? webInboxBanner() : '') + voFeedHtml() + campToday() +
     '<div class="grid2"><section class="card soft" aria-labelledby="h-streak"><h2 id="h-streak" class="eyebrow">Reeks</h2><div class="big">' + streak() + '</div><p class="small">dagen achter elkaar actief</p></section>' +
     '<section class="card" aria-labelledby="h-week"><h2 id="h-week" class="eyebrow">Afgelopen 7 dagen</h2><div class="week">' + days + '</div></section></div>' +
     '<section class="card" aria-labelledby="h-due"><h2 id="h-due">Vandaag opvolgen</h2>' +
@@ -1299,6 +1299,8 @@ async function campAct(a, d, el) {
   }
   if (a === 'camp-person-del') { const doc = clone(campDoc(d.camp)); doc.people = doc.people.filter(x => x.id !== d.id); saveCamp(d.camp, doc); state.dialog = null; render(); return true; }
   if (a === 'camp-msg') { const c = campById(state.camp.id), p = campDoc(c.id).people.find(x => x.id === d.id); state.dialog = { type: 'campmsg', id: d.id, camp: c.id, name: p.name, text: '', busy: false }; render(); campMsgRun(); return true; }
+  if (a === 'vo-seen') { voOrders().filter(e => !e.seen).forEach(e => { const d = Object.assign({}, state.docs[e.id], { seen: true }); save(e.id, d); }); render(); return true; }
+  if (a === 'vo-notify') { if (typeof Notification !== 'undefined') Notification.requestPermission().then(() => render()); return true; }
   if (a === 'org-import') { state.dialog = { type: 'orgpaste' }; render(); return true; }
   if (a === 'org-parse') {
     const text = val('org-paste'); if (!text.trim()) { toast('Plak eerst de lijst of laad een bestand.'); return true; }
@@ -1453,6 +1455,23 @@ function orgAct(a, d) {
   if (a === 'org-net') { state.netOpen = Object.assign({}, state.netOpen || {}); if (state.netOpen[d.id]) delete state.netOpen[d.id]; else state.netOpen[d.id] = true; render(); return true; }
   if (a === 'org-net-all') { const o = {}; if (d.o === '1') orgNodes().kids.forEach((v, k) => { o[k] = true; }); state.netOpen = o; render(); return true; }
   return false;
+}
+
+/* live bestellingen uit het VO (komen binnen via de extensie en de vo-ingest functie) */
+const voOrders = () => Object.keys(state.docs).filter(i => i.startsWith('vobest-')).map(i => Object.assign({ id: i }, state.docs[i])).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+function voWhen(at) { const d = (at || '').slice(0, 10), t = (at || '').slice(11, 16), td = todayKey(); return (d === td ? 'vandaag' : d ? d.slice(8, 10) + '/' + d.slice(5, 7) : '') + (t ? ' ' + t : ''); }
+function voNotifyNew(l) {
+  window.__voSeenN = window.__voSeenN || new Set();
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  l.filter(e => !e.seen && !window.__voSeenN.has(e.id)).slice(0, 5).forEach(e => { window.__voSeenN.add(e.id); try { new Notification(e.name + ': bestelling', { body: orgFmt(e.pv || 0) + ' PV · ' + (e.first ? 'eerste bestelling' : e.lr ? 'Loyalty Rewards' : 'eenmalig'), tag: e.id }); } catch (x) {} });
+}
+function voFeedHtml() {
+  const l = voOrders(); if (!l.length) return '';
+  voNotifyNew(l);
+  const un = l.filter(e => !e.seen).length, perm = typeof Notification !== 'undefined' && Notification.permission === 'default';
+  return '<section class="card" aria-labelledby="h-vo"><h2 id="h-vo">Bestellingen in je team' + (un ? ' ' + pill(un + ' nieuw', 'due') : '') + '</h2>' +
+    l.slice(0, 8).map(e => '<div class="row"><b>' + esc(e.name) + '</b>' + pill(orgFmt(e.pv || 0) + ' PV') + pill(e.first ? 'Eerste bestelling' : e.lr ? 'Loyalty Rewards' : 'Eenmalig', e.first ? 'due' : 'lr') + '<span class="spacer"></span><span class="small muted">' + esc(voWhen(e.at)) + '</span></div>').join('') +
+    '<div class="row">' + (un ? '<button class="btn ghost small" data-act="vo-seen">Alles gelezen</button>' : '') + (perm ? '<button class="btn ghost small" data-act="vo-notify">Meldingen aanzetten</button>' : '') + '</div></section>';
 }
 
 /* ---------- web-versie: team, uitloggen en account (alleen in de eigen webapp) ---------- */
