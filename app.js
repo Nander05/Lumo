@@ -1403,8 +1403,7 @@ function webDialog(d) {
   }
   if (d.type === 'inboximport') {
     const camps = campAll().filter(c => campKind(c) === 'line' && c.status !== 'ended');
-    if (!camps.length) return '<h2>Rapport importeren</h2><p>Er is nog geen campagne met een lijn. Maak eerst een campagne.</p><div class="row"><button class="btn ghost" data-act="overlay-close">Sluiten</button></div>';
-    return '<h2>Rapport importeren</h2><p class="small muted">' + esc(d.name || '') + '</p><label class="f" for="ib-camp">In welke campagne?<select id="ib-camp">' + camps.map(c => '<option value="' + esc(c.id) + '">' + esc(c.title) + '</option>').join('') + '</select></label>' +
+    return '<h2>Rapport importeren</h2><p class="small muted">' + esc(d.name || '') + '</p><label class="f" for="ib-camp">Waar naartoe?<select id="ib-camp"><option value="__org">Mijn hele organisatie (Mensen > Teamleden)</option>' + camps.map(c => '<option value="' + esc(c.id) + '">Campagne: ' + esc(c.title) + '</option>').join('') + '</select></label>' +
       '<div class="row"><button class="btn" data-act="web-inbox-go" data-id="' + esc(d.id) + '">Verder</button><button class="btn ghost" data-act="overlay-close">Annuleer</button></div>';
   }
   return '';
@@ -1431,6 +1430,7 @@ async function webAct(a, d) {
   if (a === 'web-inbox-go') {
     const campId = ($('#ib-camp') || {}).value; if (!campId) return true;
     try { const body = await W.inbox.get(d.id); if (!body) { toast('Dit rapport is niet meer beschikbaar.'); return true; }
+      if (campId === '__org') { state.dialog = { type: 'orgpaste', prefill: body, inboxId: d.id }; render(); return true; }
       state.view = 'team'; state.sub.team = 'Campagnes'; state.camp.id = campId; state.camp.filter = 'Alles'; state.camp.q = ''; state.camp.limit = 30;
       state.dialog = { type: 'camppeople', id: campId, prefill: body, inboxId: d.id }; render(); window.scrollTo(0, 0);
     } catch (e) { toast('Het rapport kon niet worden geopend.'); }
