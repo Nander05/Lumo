@@ -58,7 +58,7 @@ const SHARED = ['library', 'glibrary', 'training', 'playbook', 'agenda', 'challe
 const libAll = () => sh('library').concat(sh('glibrary').map(i => Object.assign({}, i, { central: true })));
 const LEADER_ONLY = ['shares', 'help', 'campshares'];
 const SUBS = {
-  mensen: ['Pipeline', 'Klanten', 'Teamleden', 'Netwerk', 'Workshops'],
+  mensen: ['Prospects', 'Klanten', 'Organisatie', 'Workshops'],
   groei: ['Content', 'Controle', 'Cijfers'],
   team: ['Bibliotheek', 'Campagnes', 'Training', 'Draaiboek', 'Agenda', 'Uitdaging', 'Mentor', 'Erkenning', 'Hulp', 'Overzicht']
 };
@@ -135,7 +135,7 @@ const store = {
 
 /* ---------- state ---------- */
 const state = {
-  ready: false, view: 'vandaag', sub: { mensen: 'Pipeline', groei: 'Content', team: 'Bibliotheek' },
+  ready: false, view: 'vandaag', sub: { mensen: 'Prospects', groei: 'Content', team: 'Bibliotheek' },
   docs: {}, shared: {}, libSearch: '', libCat: 'Alles',
   wiz: { step: 0, consent: false, name: '', goal: '', why: '', tone: 'warm', goals: clone(SUGGEST) },
   dialog: null, coach: { msgs: [], busy: false, ctrl: null, draft: '' }, brief: null,
@@ -422,15 +422,14 @@ function contactCard(c) {
     '<div class="row">' + acts + '<span class="spacer"></span><button class="btn ghost small" data-act="contact-edit" data-id="' + c.id + '">Bewerk</button></div></div>';
 }
 function viewMensen() {
-  const sub = state.sub.mensen; let body = '';
-  if (sub === 'Pipeline') {
+  let sub = state.sub.mensen; if (!SUBS.mensen.includes(sub)) sub = state.sub.mensen = ({ Pipeline: 'Prospects', Teamleden: 'Organisatie', Netwerk: 'Organisatie' })[sub] || 'Prospects';
+  let body = '';
+  if (sub === 'Prospects') {
     const all = byKind('Prospect');
     body = '<div class="board">' + STAGES.map(s => { const l = all.filter(c => (STAGES.includes(c.stage) ? c.stage : 'Nieuw') === s); return '<section class="stage" aria-labelledby="st-' + s + '"><h3 id="st-' + s + '">' + s + ' ' + pill(l.length) + '</h3>' + (l.map(contactCard).join('') || '<p class="small muted">Leeg</p>') + '</section>'; }).join('') + '</div>';
   } else if (sub === 'Klanten') {
     body = orgPageHtml('Klant');
-  } else if (sub === 'Teamleden') {
-    body = orgPageHtml('Teamlid');
-  } else if (sub === 'Netwerk') {
+  } else if (sub === 'Organisatie') {
     body = orgNetHtml();
   } else {
     const ws = workshops();
@@ -445,8 +444,7 @@ function viewMensen() {
         '<span class="spacer"></span><button class="btn ghost small" data-act="event-edit" data-id="' + w.id + '">Bewerk</button></div></section>';
     }).join('') || '<div class="card soft"><p>Nog geen workshops. Plan er een en nodig je gasten uit.</p></div>');
   }
-  return '<div class="row"><h1>Mensen</h1><span class="spacer"></span><button class="btn" data-act="contact-new">Nieuw contact</button></div>' + subTabs('mensen') +
-    '<p class="small muted">Alleen jij ziet deze lijsten. Bewaar alleen wat je nodig hebt: het zijn gegevens van anderen.</p>' + body;
+  return '<div class="row"><h1>Mensen</h1><span class="spacer"></span><button class="btn" data-act="contact-new">Nieuw contact</button></div>' + subTabs('mensen') + body + '<p class="small muted" style="margin-top:18px">Alleen jij ziet deze lijsten. Bewaar alleen wat je nodig hebt: het zijn gegevens van anderen.</p>';
 }
 
 /* ---------- Coach ---------- */
@@ -730,7 +728,7 @@ function overlayHTML() {
       '<label class="f" for="c-kind">Soort<select id="c-kind">' + optList(KINDS, c.kind || 'Prospect') + '</select></label>' +
       '<label class="f" for="c-stage">Fase<select id="c-stage">' + optList(STAGES, c.stage) + '</select></label>' + dateField('c-next', 'Volgend contact', c.next) + dateField('c-birth', 'Verjaardag (optioneel)', c.birthday) +
       '<fieldset class="fs"><legend>Alleen voor klanten</legend>' + dateField('c-last', 'Laatste bestelling', c.lastOrder) + '<label class="f" for="c-cycle">Gemiddelde cyclus in dagen (hoe vaak deze klant bestelt, bv. 30 = elke maand)<input type="number" id="c-cycle" min="1" max="365" value="' + esc(c.cycle || '') + '"></label></fieldset>' +
-      '<fieldset class="fs"><legend>Alleen voor teamleden</legend>' + dateField('c-start', 'Startdatum', c.startDate) + '</fieldset>' + areaField('c-note', 'Notitie', c.note) + orgYlHtml(c) + campInfoHtml(c) + btns('contact-save', d.id, 'contact-del');
+      '<fieldset class="fs"><legend>Alleen voor teamleden</legend>' + dateField('c-start', 'Startdatum', c.startDate) + '</fieldset>' + areaField('c-note', 'Notitie', c.note) + orgYlHtml(c, d.id) + campInfoHtml(c) + btns('contact-save', d.id, 'contact-del');
   }
   if (d.type === 'event') {
     const e = isNew ? {} : state.docs[d.id] || {};
@@ -1359,7 +1357,7 @@ function orgSave(d) {
   p.stale.forEach(c => remove(c.id));
   p.fresh.forEach(x => save(uid('contact'), doc(x)));
   p.upd.forEach(x => save(x.c.id, doc(x)));
-  const ib = d.inboxId; state.dialog = null; state.view = 'mensen'; state.sub.mensen = p.team > p.klanten ? 'Teamleden' : 'Klanten'; state.orgq = ''; render(); window.scrollTo(0, 0);
+  const ib = d.inboxId; state.dialog = null; state.view = 'mensen'; state.sub.mensen = 'Klanten'; state.orgq = ''; render(); window.scrollTo(0, 0);
   toast(p.fresh.length + ' toegevoegd' + (p.upd.length ? ', ' + p.upd.length + ' bijgewerkt' : '') + (p.stale.length ? ', ' + p.stale.length + ' oude regels opgeruimd' : '') + '.');
   if (ib && window.__lumoWeb && window.__lumoWeb.inbox) window.__lumoWeb.inbox.remove(ib).then(() => webInboxLoad(true), () => {});
 }
@@ -1374,20 +1372,27 @@ function orgBadges(c) {
   if (y.cq) h += pill('Commissie');
   return h;
 }
-function orgCard(c) {
-  const y = c.yl || {}, a = orgAvg(c);
-  const l1 = [y.mwo != null ? 'Laatst besteld: <b>' + orgAgo(y.mwo) + '</b>' : '', 'PV <b>' + orgFmt(y.pv || 0) + '</b>', a ? 'Gem. PV <b>' + orgFmt(a.avg) + '</b> (' + a.n + ' mnd)' : ''].filter(Boolean).join(' · ');
-  const l2 = c.kind === 'Teamlid' ? '<p class="small">OGV <b>' + orgFmt(y.ogv || 0) + '</b> · PGV <b>' + orgFmt(y.pgv || 0) + '</b>' + (y.i != null ? ' · Direct <b>' + (y.kids || 0) + '</b>' : '') + '</p>' : '';
-  return '<div class="contact org"><div class="row"><span class="nm">' + esc(c.name) + '</span></div><div class="row" style="gap:6px;flex-wrap:wrap">' + orgBadges(c) + '</div>' +
-    '<p class="small">' + l1 + '</p>' + l2 + (y.phone ? '<p class="small"><a href="tel:' + esc(String(y.phone).replace(/[^\d+]/g, '')) + '">' + esc(y.phone) + '</a>' + (y.city ? ' · ' + esc(y.city) : '') + '</p>' : '') +
-    '<div class="row"><button class="btn ghost small" data-act="org-kind" data-id="' + c.id + '" data-k="' + (c.kind === 'Teamlid' ? 'Klant' : 'Teamlid') + '">' + (c.kind === 'Teamlid' ? 'Terug naar klant' : 'Maak teamlid (actief business)') + '</button><span class="spacer"></span><button class="btn ghost small" data-act="contact-edit" data-id="' + c.id + '">Details</button></div></div>';
+function orgNeeds(c) {
+  const y = c.yl || {}, t = todayKey(); if (!y.mid && y.lvl == null) return '';
+  if (y.au && !y.aus && y.last && String(y.last).slice(0, 7) !== t.slice(0, 7) && new Date().getDate() > Number(y.au) + 1) return 'LR niet verzonden';
+  const d = c.kind === 'Klant' ? customerDue(c) : null; if (d && d <= addDays(t, 3)) return 'Bestelmoment ' + fmtDate(d);
+  if (y.mwo >= 3 && y.mwo <= 5) return y.mwo + ' mnd geen bestelling';
+  return '';
 }
-const ORG_FILTERS = { Klant: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'], Teamlid: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'] };
+function orgCard(c) {
+  const y = c.yl || {}, a = orgAvg(c), need = orgNeeds(c);
+  const l1 = [y.mwo != null ? 'Laatst besteld: <b>' + orgAgo(y.mwo) + '</b>' : '', 'PV <b>' + orgFmt(y.pv || 0) + '</b>', a ? 'Gem. PV <b>' + orgFmt(a.avg) + '</b> (' + a.n + ' mnd)' : ''].filter(Boolean).join(' \u00b7 ');
+  const l2 = c.kind === 'Teamlid' ? '<p class="small">OGV <b>' + orgFmt(y.ogv || 0) + '</b> \u00b7 PGV <b>' + orgFmt(y.pgv || 0) + '</b></p>' : '';
+  return '<div class="contact org"><div class="row"><button class="net-name" data-act="contact-edit" data-id="' + c.id + '">' + esc(c.name) + '</button><span class="spacer"></span>' + (need ? pill(need, 'due') : '') + '</div><div class="row" style="gap:6px;flex-wrap:wrap">' + orgBadges(c) + '</div>' +
+    '<p class="small">' + l1 + '</p>' + l2 + (y.phone ? '<p class="small"><a href="tel:' + esc(String(y.phone).replace(/[^\d+]/g, '')) + '">' + esc(y.phone) + '</a>' + (y.city ? ' \u00b7 ' + esc(y.city) : '') + '</p>' : '') +
+    '<div class="row"><button class="btn small" data-act="org-now" data-id="' + c.id + '">Wat nu?</button></div></div>';
+}
+const ORG_FILTERS = { Klant: ['Actie nodig', 'Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'], Teamlid: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'] };
 function orgListHtml(kind) {
   kind = kind || (state.sub.mensen === 'Klanten' ? 'Klant' : 'Teamlid');
-  const all = byKind(kind), q = normName(state.orgq || ''), f = state.orgf || 'Alles', s = state.orgsort || 'Naam';
+  const all = byKind(kind), q = normName(state.orgq || ''), f = state.orgf || 'Actie nodig', s = state.orgsort || 'Naam';
   let hit = all.filter(c => !q || normName(c.name + ' ' + (c.yl ? c.yl.phone || '' : '') + ' ' + (c.info || []).map(x => x.v).join(' ')).includes(q));
-  hit = hit.filter(c => f === 'Alles' || (f === 'Loyalty Rewards' && c.yl && c.yl.au) || (f === 'Geen LR' && !(c.yl && c.yl.au)) || (f === 'Lang niet besteld' && c.yl && c.yl.mwo != null && c.yl.mwo >= 3));
+  hit = hit.filter(c => f === 'Alles' || (f === 'Actie nodig' && orgNeeds(c)) || (f === 'Loyalty Rewards' && c.yl && c.yl.au) || (f === 'Geen LR' && !(c.yl && c.yl.au)) || (f === 'Lang niet besteld' && c.yl && c.yl.mwo != null && c.yl.mwo >= 3));
   const mw = c => c.yl && c.yl.mwo != null ? c.yl.mwo : -1, pv = c => c.yl ? c.yl.pv || 0 : 0, og = c => c.yl ? c.yl.ogv || 0 : 0;
   hit.sort(s === 'Laatst besteld (oudste eerst)' ? (a, b) => mw(b) - mw(a) || a.name.localeCompare(b.name) : s === 'PV (hoog naar laag)' ? (a, b) => pv(b) - pv(a) : s === 'OGV (hoog naar laag)' ? (a, b) => og(b) - og(a) : (a, b) => (a.name || '').localeCompare(b.name || ''));
   const lr = all.filter(c => c.yl && c.yl.au).length, cap = 40;
@@ -1395,10 +1400,9 @@ function orgListHtml(kind) {
   return '<p class="small muted">' + hit.length + ' van ' + all.length + (kind === 'Klant' ? ' klanten · ' + lr + ' met Loyalty Rewards · ' + (all.length - lr) + ' zonder' : ' teamleden · ' + lr + ' met Loyalty Rewards') + (hit.length > cap ? '. Zoek of filter om de rest te zien.' : '') + '</p><div class="board">' + hit.slice(0, cap).map(c => c.yl ? orgCard(c) : contactCard(c)).join('') + '</div>';
 }
 function orgPageHtml(kind) {
-  state.orgkind = kind; const all = byKind(kind), f = state.orgf || 'Alles';
+  state.orgkind = kind; const all = byKind(kind), f = state.orgf || 'Actie nodig';
   const sorts = kind === 'Klant' ? ['Naam', 'Laatst besteld (oudste eerst)', 'PV (hoog naar laag)'] : ['Naam', 'Laatst besteld (oudste eerst)', 'PV (hoog naar laag)', 'OGV (hoog naar laag)'];
-  return '<div class="row"><span class="spacer"></span><button class="btn" data-act="org-import">Organisatie importeren</button></div>' +
-    (all.some(c => c.yl) ? '<div class="seg" role="group" aria-label="Filter">' + ORG_FILTERS[kind].map(x => '<button class="chip" data-act="org-filter" data-f="' + x + '" aria-pressed="' + (f === x) + '">' + x + '</button>').join('') + '</div>' +
+  return (all.some(c => c.yl) ? '<div class="seg" role="group" aria-label="Filter">' + ORG_FILTERS[kind].map(x => '<button class="chip" data-act="org-filter" data-f="' + x + '" aria-pressed="' + (f === x) + '">' + x + '</button>').join('') + '</div>' +
       '<div class="row"><label class="f" style="flex:1"><span class="sr">Zoek op naam</span><input type="search" data-input="orgsearch" placeholder="Zoek op naam, gsm of plaats…" value="' + esc(state.orgq || '') + '"></label>' +
       '<label class="f"><span class="sr">Sorteren</span><select data-change="org-sort">' + sorts.map(x => '<option' + (x === (state.orgsort || 'Naam') ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></label></div>' : '') +
     '<div id="orglist">' + orgListHtml(kind) + '</div>';
@@ -1425,11 +1429,16 @@ function orgNetRow(n, g, flat) {
   const y = n.yl, k = g.kids.get(n.id) || [], open = !!(state.netOpen || {})[n.id], s = g.sum.get(n.id) || { n: 0, pv: 0, lr: 0 };
   return '<div class="net-node l' + Math.min(y.lvl, 8) + '" style="margin-left:' + (flat ? 0 : (y.lvl - 1) * 14) + 'px"><div class="row" style="gap:6px;flex-wrap:nowrap">' +
     (k.length && !flat ? '<button class="net-tog" data-act="org-net" data-id="' + n.id + '" aria-expanded="' + open + '" aria-label="' + (open ? 'Klap in' : 'Klap uit') + ' ' + esc(n.name) + '">' + (open ? '−' : '+') + '</button>' : '<span class="net-tog sp"></span>') +
-    '<button class="net-name" data-act="contact-edit" data-id="' + n.id + '">' + esc(n.name) + '</button><span class="spacer"></span>' + (y.au ? pill('LR', 'lr') : '') + (n.kind === 'Teamlid' ? pill('Team') : '') + '</div>' +
+    '<button class="net-name" data-act="contact-edit" data-id="' + n.id + '">' + esc(n.name) + '</button><span class="spacer"></span>' + (orgNeeds(n) ? pill(orgNeeds(n), 'due') : '') + (y.au ? pill('LR', 'lr') : '') + (n.kind === 'Teamlid' ? pill('Team') : '') + '</div>' +
     '<p class="small muted" style="margin:2px 0 0 30px">Niveau ' + y.lvl + ' · PV <b>' + orgFmt(y.pv || 0) + '</b>' + (n.kind === 'Teamlid' || y.ogv ? ' · OGV <b>' + orgFmt(y.ogv || 0) + '</b>' : '') + (y.mwo != null ? ' · ' + orgAgo(y.mwo) : '') + (k.length ? ' · groep ' + (s.n + 0) + ' pers.' : '') + '</p></div>';
 }
 function orgNetListHtml() {
-  const g = orgNodes(), q = normName(state.netq || '');
+  const g = orgNodes(), q = normName(state.netq || ''), nf = state.netf || 'Boom';
+  if (!q && nf !== 'Boom') {
+    const lim = new Date(Date.now() - 45 * 864e5).toISOString().slice(0, 10), hit = g.nodes.filter(n => nf === 'Team' ? n.kind === 'Teamlid' : nf === 'Nieuw' ? String(n.yl.since || '') >= lim : nf === 'Loyalty Rewards' ? !!n.yl.au : !!orgNeeds(n));
+    hit.sort((a, b) => (b.yl.ogv || 0) - (a.yl.ogv || 0) || (b.yl.pv || 0) - (a.yl.pv || 0));
+    return '<p class="small muted">' + hit.length + ' ' + (nf === 'Team' ? 'teamleden' : nf === 'Nieuw' ? 'nieuw in de laatste 45 dagen' : nf === 'Loyalty Rewards' ? 'met Loyalty Rewards' : 'die aandacht vragen') + '</p>' + (hit.slice(0, 60).map(n => orgNetRow(n, g, true)).join('') || '<p class="muted">Niemand.</p>');
+  }
   if (q) { const hit = g.nodes.filter(n => normName(n.name).includes(q)); return '<p class="small muted">' + hit.length + ' gevonden</p>' + hit.slice(0, 60).map(n => orgNetRow(n, g, true)).join(''); }
   if (!g.ordered) { const by = {}; g.nodes.forEach(n => { (by[n.yl.lvl] = by[n.yl.lvl] || []).push(n); }); return '<p class="small muted">De boomstructuur is nog niet beschikbaar voor deze lijst. Importeer je rapport één keer opnieuw (Mijn hele organisatie), dan zie je wie onder wie zit. Tot dan staat iedereen per niveau.</p>' + Object.keys(by).sort((a, b) => a - b).map(l => '<h3 style="margin:12px 0 4px">Niveau ' + l + ' <span class="small muted">(' + by[l].length + ')</span></h3>' + by[l].sort((a, b) => (b.yl.pv || 0) - (a.yl.pv || 0) || a.name.localeCompare(b.name)).slice(0, 80).map(n => orgNetRow(n, g, true)).join('')).join(''); }
   const out = [], walk = n => { out.push(orgNetRow(n, g, false)); if ((state.netOpen || {})[n.id]) (g.kids.get(n.id) || []).forEach(walk); };
@@ -1439,21 +1448,25 @@ function orgNetHtml() {
   const g = orgNodes(); if (!g.nodes.length) return '<div class="card soft"><p>Nog geen netwerk. Importeer je organisatie uit het Virtual Office (Rapport uit Gmail of CSV). Het rapport moet de kolom Level bevatten.</p><div class="row"><button class="btn" data-act="org-import">Organisatie importeren</button></div></div>';
   const lr = g.nodes.filter(n => n.yl.au).length, team = g.nodes.filter(n => n.kind === 'Teamlid').length, pv = g.nodes.reduce((a, n) => a + (n.yl.pv || 0), 0), l1 = g.roots.length;
   return '<div class="card soft"><div class="row" style="gap:14px;flex-wrap:wrap"><span><b>' + g.nodes.length + '</b><br><span class="small muted">mensen</span></span><span><b>' + (g.ordered ? l1 : g.nodes.filter(n => n.yl.lvl === 1).length) + '</b><br><span class="small muted">niveau 1</span></span><span><b>' + team + '</b><br><span class="small muted">teamleden</span></span><span><b>' + lr + '</b><br><span class="small muted">met LR</span></span><span><b>' + orgFmt(pv) + '</b><br><span class="small muted">PV totaal</span></span></div></div>' +
-    '<div class="row"><label class="f" style="flex:1"><span class="sr">Zoek in je netwerk</span><input type="search" data-input="netsearch" placeholder="Zoek op naam…" value="' + esc(state.netq || '') + '"></label><button class="btn ghost small" data-act="org-net-all" data-o="1">Alles open</button><button class="btn ghost small" data-act="org-net-all" data-o="0">Dicht</button></div>' +
+    '<div class="seg" role="group" aria-label="Weergave">' + ['Boom', 'Actie nodig', 'Team', 'Nieuw', 'Loyalty Rewards'].map(x => '<button class="chip" data-act="org-netf" data-f="' + x + '" aria-pressed="' + ((state.netf || 'Boom') === x) + '">' + x + '</button>').join('') + '</div>' +
+    '<div class="row"><label class="f" style="flex:1"><span class="sr">Zoek in je netwerk</span><input type="search" data-input="netsearch" placeholder="Zoek op naam…" value="' + esc(state.netq || '') + '"></label>' + ((state.netf || 'Boom') === 'Boom' ? '<button class="btn ghost small" data-act="org-net-all" data-o="1">Alles open</button><button class="btn ghost small" data-act="org-net-all" data-o="0">Dicht</button>' : '') + '</div>' +
     '<div id="netlist" class="net">' + orgNetListHtml() + '</div>';
 }
-function orgYlHtml(c) {
+function orgYlHtml(c, cid) {
   const y = c && c.yl; if (!y) return ''; const a = orgAvg(c), rows = [['Loyalty Rewards', y.au ? 'Ja, dag ' + y.au : 'Nee'], ['Laatst besteld', y.mwo != null ? orgAgo(y.mwo) : '-'], ['PV deze maand', orgFmt(y.pv || 0)], ['Gemiddelde PV', a ? orgFmt(a.avg) + ' (over ' + a.n + ' maand' + (a.n === 1 ? '' : 'en') + ')' : '-']];
   if (c.kind === 'Teamlid') { rows.push(['OGV', orgFmt(y.ogv || 0)], ['PGV', orgFmt(y.pgv || 0)]); if (y.i != null) rows.push(['Direct in je lijn', String(y.kids || 0)]); }
   if (y.pm) { const sp = Object.keys(state.docs).map(k => state.docs[k]).find(x => x && x.yl && String(x.yl.mid) === String(y.pm)); if (sp) rows.push(['Sponsor', sp.name]); } if (y.since) rows.push(['Lid sinds', fmtDate(String(y.since).slice(0, 10))]);
   const sig = []; if (y.mwo >= 4) sig.push(y.mwo + ' maanden zonder bestelling'); if (y.au && !y.aus && y.last && String(y.last).slice(0, 7) !== todayKey().slice(0, 7) && new Date().getDate() > Number(y.au) + 1) sig.push('Loyalty Rewards van deze maand is niet verzonden'); if (!y.au && y.last) sig.push('Bestelt los, zonder Loyalty Rewards'); if (y.au && y.aus) sig.push('Loyalty Rewards is deze maand verzonden'); if (y.pv >= 100) sig.push('Al ' + orgFmt(y.pv) + ' PV deze maand'); if (sig.length) rows.push(['Opvallend', sig.join('. ')]);
   if (y.lvl) rows.push(['Niveau', String(y.lvl)]); if (y.act) rows.push(['Actief sinds', fmtDate(y.act)]); if (y.phone) rows.push(['Telefoon', y.phone]); if (y.city) rows.push(['Plaats', y.city]);
-  return '<details class="pinfo" open><summary>Cijfers uit je rapport</summary><dl>' + rows.map(r => '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd>').join('') + '</dl></details>';
+  const mk = cid ? '<div class="row"><button class="btn ghost small" data-act="org-kind" data-id="' + cid + '" data-k="' + (c.kind === 'Teamlid' ? 'Klant' : 'Teamlid') + '">' + (c.kind === 'Teamlid' ? 'Terug naar klant' : 'Maak teamlid (actief business)') + '</button><button class="btn small" data-act="org-now" data-id="' + cid + '">Wat nu?</button></div>' : '';
+  return '<details class="pinfo" open><summary>Cijfers uit je rapport</summary><dl>' + rows.map(r => '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd>').join('') + '</dl>' + mk + '</details>';
 }
 function orgAct(a, d) {
   if (a === 'org-kind') { const c0 = state.docs[d.id]; if (!c0) return true; save(d.id, Object.assign({}, c0, { kind: d.k, kindSet: true, updatedAt: new Date().toISOString() })); render(); toast(d.k === 'Teamlid' ? (c0.name + ' is nu teamlid.') : (c0.name + ' staat weer bij de klanten.')); return true; }
   if (a === 'org-filter') { state.orgf = d.f; render(); return true; }
   if (a === 'org-net') { state.netOpen = Object.assign({}, state.netOpen || {}); if (state.netOpen[d.id]) delete state.netOpen[d.id]; else state.netOpen[d.id] = true; render(); return true; }
+  if (a === 'org-netf') { state.netf = d.f; render(); return true; }
+  if (a === 'org-now') { const c = state.docs[d.id]; if (!c) return true; state.view = 'coach'; state.dialog = null; render(); window.scrollTo(0, 0); coachSend(c.name + ': wat is nu het slimste om te doen voor deze persoon? Wat ik weet: ' + deepFacts(c) + '. Geef maximaal twee concrete acties, elk met een reden die nieuwe info of waarde bevat (geen losse check-in), en \u00e9\u00e9n kort bericht dat ik kan sturen met iets nuttigs erin. Zeg erbij als je iets mist.'); return true; }
   if (a === 'org-net-all') { const o = {}; if (d.o === '1') orgNodes().kids.forEach((v, k) => { o[k] = true; }); state.netOpen = o; render(); return true; }
   return false;
 }
@@ -1461,7 +1474,7 @@ function orgAct(a, d) {
 /* live bestellingen uit het VO (komen binnen via de extensie en de vo-ingest functie) */
 const voOrders = () => Object.keys(state.docs).filter(i => i.startsWith('vobest-')).map(i => Object.assign({ id: i }, state.docs[i])).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
 function voWhen(at) { const d = (at || '').slice(0, 10), t = (at || '').slice(11, 16), td = todayKey(); return (d === td ? 'vandaag' : d ? d.slice(8, 10) + '/' + d.slice(5, 7) : '') + (t ? ' ' + t : ''); }
-const voLabel = e => ({ new: 'Nieuw lid', stop: 'Autoship gestopt', fail: 'Autoship niet verzonden', idle: 'Geen bestelling' })[e.t] || (e.first ? 'Eerste bestelling' : e.lr ? 'Loyalty Rewards' : 'Eenmalig');
+const voLabel = e => ({ new: 'Nieuw lid', conv: 'Prospect werd lid', stop: 'Autoship gestopt', fail: 'Autoship niet verzonden', idle: 'Geen bestelling' })[e.t] || (e.first ? 'Eerste bestelling' : e.lr ? 'Loyalty Rewards' : 'Eenmalig');
 function voNotifyNew(l) {
   window.__voSeenN = window.__voSeenN || new Set();
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
@@ -1482,7 +1495,8 @@ const DEEP_ASK = {
   new: 'is nieuw in mijn team. Wat zijn de beste eerste stappen in de eerste dagen?',
   stop: 'heeft de Loyalty Rewards (autoship) gestopt. Wat kan ik doen?',
   fail: 'heeft een Loyalty Rewards-bestelling die niet verzonden is. Wat kan ik doen?',
-  idle: 'heeft al vier maanden niet besteld. Wat kan ik doen?'
+  idle: 'heeft al vier maanden niet besteld. Wat kan ik doen?',
+  conv: 'was een prospect en heeft nu een account in mijn organisatie. Wat is de beste eerste stap?'
 };
 function deepFacts(c) {
   const y = c.yl || {};
@@ -1498,7 +1512,7 @@ function deepGo(t) {
       coachSend('Melding uit mijn organisatie: ' + c.name + ' ' + DEEP_ASK[t.e] + ' Wat ik weet: ' + deepFacts(c) + '. Geef maximaal twee concrete acties, elk met een reden die nieuwe info of waarde bevat (geen losse check-in), en één kort bericht dat ik kan sturen met iets nuttigs erin. Zeg erbij als je iets mist om dit goed te doen.');
       return true;
     }
-    state.view = 'mensen'; state.sub.mensen = c.kind === 'Teamlid' ? 'Teamleden' : 'Klanten'; state.dialog = { type: 'contact', id: t.open }; state.focusNext = false; render(); window.scrollTo(0, 0); return true;
+    state.view = 'mensen'; state.sub.mensen = 'Klanten'; state.dialog = { type: 'contact', id: t.open }; state.focusNext = false; render(); window.scrollTo(0, 0); return true;
   }
   if (t.v) { state.view = t.v; state.dialog = null; render(); window.scrollTo(0, 0); return true; }
   return false;
