@@ -206,14 +206,12 @@ function dueContacts() {
 }
 function customerDue(c) { return c.lastOrder && c.cycle ? addDays(c.lastOrder, parseInt(c.cycle, 10)) : ''; }
 function quiet() {
+  /* alleen mensen bij wie er iets te bieden valt: een geplande afspraak of een bestelmoment. Stilte alleen is geen reden. */
   const t = todayKey(), out = [];
   allContacts().forEach(c => {
     if (c.org) return;
-    const upd = (c.updatedAt || '').slice(0, 10) || '0000-00-00', age = daysBetween(upd, t);
-    if (c.kind === 'Klant') { const d = customerDue(c); if (d && d <= addDays(t, 3)) out.push({ c, why: 'tijd voor contact rond een nieuwe bestelling' }); }
-    else if (c.stage === 'Gestart' || c.stage === 'Later') { if (c.kind === 'Teamlid' && age >= 14) out.push({ c, why: age + ' dagen niets gehoord' }); }
-    else if (age >= 10) out.push({ c, why: age + ' dagen geen contact' });
-    else if (c.next && daysBetween(c.next, t) >= 3) out.push({ c, why: 'opvolging was gepland op ' + fmtDate(c.next) });
+    if (c.kind === 'Klant') { const d = customerDue(c); if (d && d <= addDays(t, 3)) out.push({ c, why: 'bestelmoment rond ' + fmtDate(d) + ': bied iets nuttigs aan, geen losse herinnering' }); }
+    else if (c.next && daysBetween(c.next, t) >= 3) out.push({ c, why: 'er was een afspraak of opvolging gepland op ' + fmtDate(c.next) + ': plan een nieuw moment met iets concreets erbij' });
   });
   return out.slice(0, 6);
 }
@@ -330,6 +328,7 @@ function rulesText() {
     'Toon: ' + (TONES[p.tone] || TONES.warm) + '.',
     'VANGRAILS: Doe geen inkomstenbeloften en geen uitspraken over wat iemand kan verdienen. Doe geen gezondheidsclaims: geen genezing, behandeling, diagnose of preventie, en geen medisch advies; verwijs bij gezondheidsvragen naar een arts of therapeut. Geen druk, geen misleiding, geen verzonnen getuigenissen.',
     'Leg promoties, voorwaarden en producten alleen uit op basis van de BIBLIOTHEEK hieronder. Staat het er niet in, zeg dat eerlijk en verwijs naar de officiële bron of de upline. Verzin geen regels, bedragen of data.',
+    'OPVOLGING = WAARDE (harde regel): Stel nooit een opvolging of bericht voor zonder concrete reden. Elk opvolgbericht moet nieuwe, nuttige informatie voor precies deze persoon bevatten (bijvoorbeeld een antwoord op haar vraag, iets uit de bibliotheek dat past bij haar situatie, of een update over iets wat ze eerder aanhaalde) of een nieuwe afspraak voorstellen met een concreet moment. Schrijf geen check-ins zoals "even horen hoe het gaat", "ik dacht aan je" of "laat maar weten", want die vragen iets zonder iets te geven. Een dag of week stilte is op zich geen reden. Is er geen waarde of afspraak om aan te bieden, zeg dan eerlijk dat er nu niets te sturen valt, en stel voor eerst iets nuttigs te zoeken of een afspraak voor te bereiden. Noem in elk concept kort welke waarde of afspraak erin zit.',
     'Gebruik alleen de gegevens van dit lid. Berichten die je schrijft zijn concepten die het lid zelf verstuurt: respectvol, zonder druk, en accepteer een nee.'
   ].join('\n- ');
 }
@@ -397,7 +396,7 @@ function viewVandaag() {
     '<section class="card" aria-labelledby="h-week"><h2 id="h-week" class="eyebrow">Afgelopen 7 dagen</h2><div class="week">' + days + '</div></section></div>' +
     '<section class="card" aria-labelledby="h-due"><h2 id="h-due">Vandaag opvolgen</h2>' +
     (due.length ? due.slice(0, 6).map(c => row(c.name, pill(c.kind || 'Prospect') + pill(c.stage, 'due'), c.id)).join('') : '<p class="muted">Niemand staat voor vandaag gepland.</p>') + '</section>' +
-    (q.length ? '<section class="card" aria-labelledby="h-quiet"><h2 id="h-quiet">Even laten horen</h2>' + q.map(x => '<div class="row"><b>' + esc(x.c.name) + '</b><span class="small muted">' + esc(x.why) + '</span><span class="spacer"></span>' + coachBtn('Bericht', 'Schrijf een kort, vriendelijk bericht voor ' + x.c.name + ' (' + (x.c.kind || 'Prospect') + ', fase ' + x.c.stage + '). Reden: ' + x.why + '. ' + (x.c.note ? 'Notitie: ' + x.c.note : '') + ' Geef één concept dat ik zelf kan versturen.') + '</div>').join('') + '</section>' : '') +
+    (q.length ? '<section class="card" aria-labelledby="h-quiet"><h2 id="h-quiet">Opvolging met reden</h2>' + q.map(x => '<div class="row"><b>' + esc(x.c.name) + '</b><span class="small muted">' + esc(x.why) + '</span><span class="spacer"></span>' + coachBtn('Bericht', 'Schrijf een kort bericht voor ' + x.c.name + ' (' + (x.c.kind || 'Prospect') + ', fase ' + x.c.stage + '). Reden: ' + x.why + '. ' + (x.c.note ? 'Notitie: ' + x.c.note + '. ' : '') + 'Het bericht moet nieuwe, nuttige informatie voor haar situatie bevatten of een nieuwe afspraak voorstellen. Geen check-in. Staat er in mijn gegevens niets om aan te bieden, zeg dat dan en vraag me wat ik haar kan geven. Geef één concept en zeg erbij welke waarde of afspraak erin zit.') + '</div>').join('') + '</section>' : '') +
     '<section class="card" aria-labelledby="h-up"><h2 id="h-up">Binnenkort</h2>' + (up.length ? up.map(u => '<div class="row"><span class="pill">' + esc(fmtDate(u.date)) + '</span><span>' + esc(u.text) + '</span></div>').join('') : '<p class="muted">De komende tien dagen staat er niets gepland.</p>') + '</section>' +
     (nl ? '<section class="card gold"><h2>Nieuw in de bibliotheek</h2><p>' + nl + ' tekst' + (nl > 1 ? 'en zijn' : ' is') + ' nieuw of bijgewerkt sinds je laatste bezoek.</p><div><button class="btn ghost small" data-act="goto" data-view="team" data-sub="Bibliotheek">Bekijk</button></div></section>' : '');
 }
@@ -415,7 +414,7 @@ function contactCard(c) {
   }
   if (k === 'Teamlid') {
     const day = c.startDate ? daysBetween(c.startDate, t) : null; meta = day != null ? pill('Dag ' + day) : '';
-    acts = coachBtn('Check-in bericht', 'Schrijf een korte check-in voor teamlid ' + c.name + (day != null ? ' (dag ' + day + ' sinds de start)' : '') + '. ' + (c.note || '') + ' Geef één concept.');
+    acts = coachBtn('Bericht met waarde', 'Schrijf een kort bericht voor teamlid ' + c.name + (day != null ? ' (dag ' + day + ' sinds de start)' : '') + '. ' + (c.note || '') + ' Het bericht moet iets nuttigs bevatten voor haar huidige stap (een tip, uitleg of bron uit de bibliotheek) of een nieuwe afspraak voorstellen. Geen check-in. Weet je niet wat ze nu nodig heeft, vraag me dat eerst. Geef één concept en zeg welke waarde erin zit.');
   }
   return '<div class="contact"><div class="row"><span class="nm">' + esc(c.name) + '</span><span class="spacer"></span>' + meta + '</div>' +
     (c.note ? '<p class="small muted">' + esc(c.note.length > 120 ? c.note.slice(0, 120) + '…' : c.note) + '</p>' : '') +
@@ -457,7 +456,7 @@ function viewCoach() {
   const msgs = c.msgs.map((m, i) => '<div class="msg ' + m.role + '">' + (m.role === 'assistant' ? md(m.text || '…') + (m.text && !c.busy ? '<div class="tools"><button class="btn ghost small" data-act="copy" data-i="' + i + '">Kopieer</button><button class="btn ghost small" data-act="to-check" data-i="' + i + '">Controleer</button></div>' : '') : esc(m.text).replace(/\n/g, '<br>')) + '</div>').join('');
   const chips = [['Dagplan', 'Maak een dagplan voor vandaag. Maximaal drie acties.'], ['Weekplan', 'Maak een weekplan met maximaal drie prioriteiten en per dag één concrete actie.'], ['Check-in', 'Doe een korte avondcheck-in met me: wat ging goed en wat is morgen de eerste stap?'], ['Promotie uitleggen', 'Leg de huidige promoties kort en eerlijk uit, alleen op basis van de bibliotheek.'], ['Gesprek voorbereiden', 'Help me een eerste gesprek voorbereiden met iemand die nieuwsgierig is naar wellness.']];
   const roles = [['Iemand die twijfelt', 'iemand die twijfelt of het iets voor haar is'], ['Een kritische vriend', 'een vriend die sceptisch is over netwerkmarketing'], ['Iemand zonder tijd', 'iemand die zegt dat ze geen tijd heeft']];
-  const scripts = [['Eerste uitnodiging', 'een eerste uitnodiging voor een kennismakingsgesprek'], ['Opvolging na workshop', 'een opvolging na een workshop'], ['Herbestelling', 'een vriendelijke herinnering aan een klant dat een nieuwe bestelling in zicht is'], ['Welkom nieuw teamlid', 'een welkomstbericht voor een nieuw teamlid'], ['Iemand zegt nee', 'een reactie als iemand nee zegt, zodat de deur open blijft']];
+  const scripts = [['Eerste uitnodiging', 'een eerste uitnodiging voor een kennismakingsgesprek'], ['Opvolging na workshop', 'een opvolging na een workshop met iets nuttigs voor elke gast (materiaal, antwoord op een vraag) en een voorstel voor een nieuw moment'], ['Herbestelling', 'een bericht aan een klant rond een nieuw bestelmoment, met iets nuttigs erin (tip, info over haar product) in plaats van een losse herinnering'], ['Welkom nieuw teamlid', 'een welkomstbericht voor een nieuw teamlid'], ['Iemand zegt nee', 'een reactie als iemand nee zegt, zodat de deur open blijft']];
   const sel = (id, label, opts) => '<label class="f" for="' + id + '">' + label + '<select id="' + id + '" data-change="' + id + '"><option value="">Kies…</option>' + opts + '</select></label>';
   const intro = '<div class="card soft"><h2>Jouw coach</h2><p>Stel een vraag of kies een snelle start. De coach kent je doelen, mensen, cijfers en de bibliotheek, en niets van anderen.</p>' +
     '<div class="row">' + chips.map(x => '<button class="chip" data-act="coach-chip" data-prompt="' + esc(x[1]) + '">' + x[0] + '</button>').join('') + '</div>' +
@@ -629,7 +628,7 @@ function mockHTML(kind) {
     '<div class="notif">' + ICON.today + '<span><b>Goedemorgen, ' + esc(profile().name) + '</b><br>Je hebt 3 mensen om op te volgen en je teamcall begint vanavond om 20:00.<small>Lumo · nu</small></span></div>' +
     '<div class="notif">' + ICON.people + '<span><b>Even laten horen</b><br>Mila de Vries wacht al 12 dagen op een bericht.<small>Lumo · 2 min geleden</small></span></div>' +
     '<div class="notif">' + ICON.team + '<span><b>Nieuw in de bibliotheek</b><br>De welkomstactie is bijgewerkt.<small>Lumo · gisteren</small></span></div></div>' +
-    '<div>' + tg('Ochtendbriefing', 'Elke dag om 08:00', true) + tg('Opvolgherinneringen', 'Wanneer een gesprek gepland staat', true) + tg('Stil geworden', 'Als iemand lang niets hoorde', true) + tg('Teamnieuws', 'Agenda en bibliotheek', false) + tg('Avondcheck-in', 'Elke avond om 21:00', false) + '</div>';
+    '<div>' + tg('Ochtendbriefing', 'Elke dag om 08:00', true) + tg('Opvolgherinneringen', 'Wanneer een gesprek gepland staat', true) + tg('Opvolging met reden', 'Alleen als er iets te bieden valt', true) + tg('Teamnieuws', 'Agenda en bibliotheek', false) + tg('Avondcheck-in', 'Elke avond om 21:00', false) + '</div>';
   if (kind === 'voice') { const h = [14, 30, 22, 40, 18, 34, 44, 26, 38, 16, 28, 36, 20, 42, 24, 32, 12, 30, 22, 38]; body = '<div class="wave" aria-hidden="true">' + h.map(x => '<i style="height:' + x + 'px"></i>').join('') + '</div>' +
     '<button class="mic" data-act="mock-noop" aria-label="Opnemen (voorbeeld)">' + SVG('<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/>') + '</button><p class="small muted" style="text-align:center">Tik en praat. 00:24</p>' +
     '<div class="brief"><p class="eyebrow">Uitgeschreven</p><p>"Net gebeld met Mila. Ze wil graag het startpakket bekijken, maar eerst met haar man overleggen. Donderdag opnieuw contact."</p></div>' +
@@ -1642,7 +1641,7 @@ async function coachSend(text) {
 async function briefRun() {
   state.brief = { text: '', busy: true }; render();
   try {
-    const full = await aiStream('Maak mijn ochtendbriefing in vier korte blokken met een vette kop: Vandaag (maximaal drie acties), Opvolgen (wie en waarom), Binnenkort (wat eraan komt) en Eén zin om mee te starten. Gebruik mijn gegevens en verzin niets.', null, t => { state.brief.text = t; const el = $('#brief'); if (el) el.innerHTML = md(t); });
+    const full = await aiStream('Maak mijn ochtendbriefing in vier korte blokken met een vette kop: Vandaag (maximaal drie acties), Opvolgen (alleen wie een concrete reden heeft: nieuwe info of een nieuwe afspraak om aan te bieden; geen check-ins; staat er niemand, zeg dat dan), Binnenkort (wat eraan komt) en Eén zin om mee te starten. Gebruik mijn gegevens en verzin niets.', null, t => { state.brief.text = t; const el = $('#brief'); if (el) el.innerHTML = md(t); });
     if (full) state.brief.text = full;
   } catch (e) { state.brief.text = state.brief.text || (e && e.code === 'none' ? 'De coach is in deze weergave niet beschikbaar. Open Lumo via claude.ai.' : aiErr(e)); }
   state.brief.busy = false; render();
