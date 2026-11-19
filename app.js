@@ -1544,7 +1544,7 @@ function groeiOverzichtHtml() {
 }
 
 /* ---------- Commissie (schatting op basis van het Europese compensatieplan) ---------- */
-const COMM_RATES = [0.08, 0.05, 0.04, 0.04, 0.04], COMM_EUR = 1;
+const COMM_RATES = [0.08, 0.05, 0.04, 0.04, 0.04], COMM_EUR = 0.875;
 function commEst(scen) {
   const N = orgNodes(), d = new Date(), td = d.getDate(), x = new Date(d.getFullYear(), d.getMonth() - 2, 1), lim = x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-01';
   const base = c => scen === 'now' ? (c.yl.pv || 0) : (c.yl.pv || 0) + (c.yl.au && !c.yl.aus && Number(c.yl.au) >= td ? (c.yl.aupv || 0) : 0);
@@ -1596,7 +1596,7 @@ function commHtml() {
     (silverNow ? '<p class="small">Met Silver komt er persoonlijke generatie bij, ongeveer <b>' + eur(b.gen) + '</b>.</p>' : '<p class="small">Haal je <b>Silver</b>, dan komt er persoonlijke generatie bij (2,5% op je groepen), ongeveer <b>+' + eur(b.gen) + '</b> per maand bij dit volume.</p>') +
     (ref ? '<p class="small muted">Ter vergelijking, ' + esc(mnm(ref.month)) + ' echt: unilevel ' + eur(ref.uni) + ', Fast Start ' + eur(ref.fs) + ', leiderschapsbonus ' + eur(ref.glb) + ', samen ' + eur(ref.total) + '.</p>' : '') +
     (state.chAdd ? '<div class="mgdet"><label class="f" for="ch-m">Maand<select id="ch-m">' + opts + '</select></label><label class="f" for="ch-v">Totaal verdiend in euro<input id="ch-v" inputmode="decimal" placeholder="bijvoorbeeld 521,82"></label><div class="row"><button class="btn small" data-act="org-ch-save">Opslaan</button><button class="btn ghost small" data-act="org-ch-add">Annuleer</button></div></div>' : '<div class="row"><button class="btn ghost small" data-act="org-ch-add">Vorige maand toevoegen</button></div>') +
-    '<p class="small muted">Gebaseerd op het Europese plan: 8, 5 en 4% op vijf niveaus met compressie onder 100 PV, Fast Start 25% en 10% op de eerste drie maanden, en 1 PV als ongeveer €1. Het is een schatting en geen belofte van inkomen. De leiderschapsbonus, rangbonussen en afhoudingen zitten er niet in.</p>';
+    '<p class="small muted">Gebaseerd op het Europese plan: 8, 5 en 4% op vijf niveaus met compressie onder 100 PV, Fast Start 25% en 10% op de eerste drie maanden, en 1 PV als ongeveer \u20ac0,88, afgestemd op de schatting in YL Insights. Het is een schatting en geen belofte van inkomen. De leiderschapsbonus, rangbonussen en afhoudingen zitten er niet in.</p>';
   return gsec('comm', 'Commissie', body, null, true, '≈ ' + eur(est));
 }
 const ORG_FILTERS = { Klant: ['Actie nodig', 'Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'], Teamlid: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'] };
