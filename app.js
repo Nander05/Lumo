@@ -1529,13 +1529,12 @@ function groeiOverzichtHtml() {
   const lim = addDays(t, -45), nieuw = cs.filter(c => String(c.yl.since || '').slice(0, 10) >= lim).sort((a, b) => String(b.yl.since).localeCompare(String(a.yl.since)));
   const nBest = nieuw.filter(c => c.yl.last && String(c.yl.last).slice(0, 10) >= String(c.yl.since).slice(0, 10)).length;
   const top = cs.filter(c => (c.yl.pv || 0) > 0).sort((a, b) => b.yl.pv - a.yl.pv).slice(0, 6);
-  const sec = (h, body, note) => '<section class="card"><h2>' + h + '</h2>' + body + (note ? '<p class="small muted">' + note + '</p>' : '') + '</section>';
+  const sec = (h, body, note, def) => gsec('s:' + h, h, body, note, def);
   const facts = 'Mijn cijfers voor ' + new Date().toLocaleDateString('nl-NL', { month: 'long' }) + ': ' + cs.length + ' mensen, OGV ' + orgFmt(ogvNow || 0) + ' (verwacht einde maand ' + orgFmt((ogvNow || 0) + pj.add) + '), ' + act + ' leden met bestelling, ' + lr.length + ' met Loyalty Rewards (' + lrFail + ' niet verzonden), ' + nieuw.length + ' nieuwe leden in 45 dagen waarvan ' + nBest + ' al besteld hebben. Sterkste groepen: ' + legs.slice(0, 3).map(x => grNm(x.c.name) + ' ' + orgFmt(x.v) + ' OGV').join(', ') + '. Wat valt op, wat is mijn grootste kans en wat doe ik deze week? Maximaal drie punten, met waarde of nieuwe info voor mensen, zonder beloftes.';
-  return '<section class="card"><h2>Je organisatie</h2>' + grTile('Mensen in totaal', S.tot, S.ms) + grTile('Nieuwe leden', S.nw, S.ms) + grTile('OGV', S.ogv, S.ms) + grTile('Leden met bestelling', S.act, S.ms) +
+  return commHtml() + gsec('org', 'Je organisatie', grTile('Mensen in totaal', S.tot, S.ms) + grTile('Nieuwe leden', S.nw, S.ms) + grTile('OGV', S.ogv, S.ms) + grTile('Leden met bestelling', S.act, S.ms) +
     '<p class="small muted">Nieuwe leden en het totaal lopen terug in de tijd. OGV en bestellingen worden bijgehouden vanaf november. De huidige maand is nog niet af.</p>' +
-    '<div class="row"><button class="btn small" data-act="coach-chip" data-prompt="' + esc(facts) + '">Wat zeggen mijn cijfers?</button></div></section>' +
-    sec('Deze maand in cijfers', '<div class="ostats" style="padding:4px 0"><div class="ost"><b>' + orgFmt(ogvNow || 0) + '</b><span class="small muted">OGV nu</span></div><div class="ost"><b>' + orgFmt((ogvNow || 0) + pj.add) + '</b><span class="small muted">verwacht</span></div><div class="ost"><b>' + act + '</b><span class="small muted">besteld</span></div><div class="ost"><b>' + orgFmt(pvAvg) + '</b><span class="small muted">gem. PV</span></div></div>', 'Verwacht = huidige OGV plus de Loyalty Rewards die nog gepland staan. Gem. PV is per lid dat besteld heeft.') +
-    commHtml() +
+    '<div class="row"><button class="btn small" data-act="coach-chip" data-prompt="' + esc(facts) + '">Wat zeggen mijn cijfers?</button></div>', null, true) +
+    sec('Deze maand in cijfers', '<div class="ostats" style="padding:4px 0"><div class="ost"><b>' + orgFmt(ogvNow || 0) + '</b><span class="small muted">OGV nu</span></div><div class="ost"><b>' + orgFmt((ogvNow || 0) + pj.add) + '</b><span class="small muted">verwacht</span></div><div class="ost"><b>' + act + '</b><span class="small muted">besteld</span></div><div class="ost"><b>' + orgFmt(pvAvg) + '</b><span class="small muted">gem. PV</span></div></div>', 'Verwacht = huidige OGV plus de Loyalty Rewards die nog gepland staan. Gem. PV is per lid dat besteld heeft.', true) +
     sec('Je groepen', grBars(legs.slice(0, 8).map(x => ({ l: grNm(x.c.name), v: x.v, t: orgFmt(x.v) + ' · ' + Math.round(x.v / legTot * 100) + '%' }))) + '<p class="small muted" style="margin-top:6px">Per groep: ' + legs.slice(0, 8).map(x => grNm(x.c.name).split(' ')[0] + ' ' + x.n + ' mensen, ' + x.act + ' besteld, ' + x.lr + ' LR').join(' · ') + '</p>', 'Een groep is een eerste-lijnspersoon met zijn of haar hele downline. Het percentage is het aandeel in je OGV.') +
     sec('Loyalty Rewards', '<div class="ostats" style="padding:4px 0"><div class="ost"><b>' + lr.length + '</b><span class="small muted">actief</span></div><div class="ost"><b>' + lrShip + '</b><span class="small muted">verzonden</span></div><div class="ost"><b>' + (lr.length - lrShip - lrFail) + '</b><span class="small muted">nog gepland</span></div><div class="ost"><b>' + lrFail + '</b><span class="small muted">niet verzonden</span></div></div><p class="small">Nog te verwachten uit gepland: <b>' + orgFmt(pj.add) + ' PV</b>. ' + Math.round(lr.length / cs.length * 100) + '% van je mensen heeft Loyalty Rewards.</p>') +
     sec('Wanneer bestelden ze voor het laatst', grBars(Object.keys(bk).map(k => ({ l: k, v: bk[k], t: String(bk[k]) })))) +
@@ -1567,16 +1566,38 @@ function commEst(scen) {
   return { per, uni: Math.round(uni * 100) / 100, fs: Math.round(fs * COMM_EUR * 100) / 100, gen: Math.round(all * 0.025 * COMM_EUR * 100) / 100, depth };
 }
 const eur = v => '€' + (Math.round(v * 100) / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+try { state.gopen = JSON.parse(localStorage.getItem('lumo-gopen') || '{}'); } catch (e) { state.gopen = {}; }
+const gOpen = (k, def) => state.gopen && state.gopen[k] != null ? !!state.gopen[k] : !!def;
+function gsec(k, title, body, note, def, hint) {
+  const o = gOpen(k, def);
+  return '<section class="card gsec"><button class="gsec-h" data-act="org-gopen" data-k="' + esc(k) + '" aria-expanded="' + (o ? 'true' : 'false') + '"><h2>' + title + '</h2>' + (hint ? '<span class="small muted gsec-hint">' + hint + '</span>' : '') + '<span class="spacer"></span><span class="gsec-chev" aria-hidden="true">' + (o ? '▾' : '▸') + '</span></button>' +
+    (o ? body + (note ? '<p class="small muted">' + note + '</p>' : '') : '') + '</section>';
+}
+function commHist() {
+  const h = Object.assign({}, state.docs.commhist || {}), r = state.docs.commref; delete h.updatedAt;
+  if (r && r.month && !h[r.month]) h[r.month] = { total: r.total };
+  return h;
+}
+function commChart(est) {
+  const ms = grMonths(6), h = commHist(), cur = ms[ms.length - 1];
+  const vals = ms.map((m, i) => i === ms.length - 1 ? est : (h[m] && h[m].total != null ? Number(h[m].total) : null)), max = Math.max.apply(null, vals.map(v => v || 0)) || 1;
+  const mn = m => new Date(m + '-01').toLocaleDateString('nl-NL', { month: 'short' }).replace('.', '');
+  return '<div class="grbars" style="height:112px;align-items:flex-end;margin-top:10px">' + vals.map((v, i) => '<div class="grc"><em class="gcv">' + (v == null ? '' : Math.round(v)) + '</em><div class="grb' + (i === vals.length - 1 ? ' est' : ' on') + '" style="height:' + (v == null ? 3 : Math.max(4, Math.round(v / max * 72))) + 'px"></div><span>' + mn(ms[i]) + '</span></div>').join('') + '</div>';
+}
 function commHtml() {
-  const a = commEst('now'), b = commEst('exp'), ref = state.docs.commref, g = state.docs.mgoal, ogvExp = mgNow('pv') + mgProj().add;
-  const silverNow = ogvExp >= 10000;
+  const a = commEst('now'), b = commEst('exp'), ref = state.docs.commref, ogvExp = mgNow('pv') + mgProj().add, silverNow = ogvExp >= 10000;
+  const est = b.uni + b.fs, now = a.uni + a.fs, ms = grMonths(6), h = commHist(), prev = h[ms[ms.length - 2]] && h[ms[ms.length - 2]].total, mnm = m => new Date(m + '-01').toLocaleDateString('nl-NL', { month: 'long' });
   const row = (l, x, y) => '<div class="mgrow"><span class="mgn">' + l + '</span><span class="small mgv">' + eur(x) + '</span><span class="small mgv" style="min-width:84px">' + eur(y) + '</span></div>';
-  return '<section class="card"><h2>Commissie (schatting)</h2>' +
+  const opts = ms.slice(0, -1).map(m => '<option value="' + m + '">' + mnm(m) + '</option>').join('');
+  const body = '<div class="cbig"><div class="small muted">Verwacht deze maand</div><div class="big cnum">' + eur(est) + '</div><div class="small muted">tot nu toe ' + eur(now) + (prev != null ? ' · vorige maand echt ' + eur(prev) : '') + '</div></div>' +
+    commChart(est) + '<p class="small muted" style="margin:2px 0 8px">Donkere balken zijn wat je echt kreeg, de lichte balk is de schatting voor deze maand zonder leiderschapsbonus.</p>' +
     '<div class="mgrow small muted"><span class="mgn"></span><span class="mgv">tot nu toe</span><span class="mgv" style="min-width:84px">verwacht</span></div>' +
-    row('Unilevel', a.uni, b.uni) + row('Fast Start', a.fs, b.fs) + '<div class="mgrow"><b class="mgn">Samen</b><b class="small mgv">' + eur(a.uni + a.fs) + '</b><b class="small mgv" style="min-width:84px">' + eur(b.uni + b.fs) + '</b></div>' +
+    row('Unilevel', a.uni, b.uni) + row('Fast Start', a.fs, b.fs) + '<div class="mgrow"><b class="mgn">Samen</b><b class="small mgv">' + eur(now) + '</b><b class="small mgv" style="min-width:84px">' + eur(est) + '</b></div>' +
     (silverNow ? '<p class="small">Met Silver komt er persoonlijke generatie bij, ongeveer <b>' + eur(b.gen) + '</b>.</p>' : '<p class="small">Haal je <b>Silver</b>, dan komt er persoonlijke generatie bij (2,5% op je groepen), ongeveer <b>+' + eur(b.gen) + '</b> per maand bij dit volume.</p>') +
-    (ref ? '<p class="small muted">Ter vergelijking, ' + esc(new Date(ref.month + '-01').toLocaleDateString('nl-NL', { month: 'long' })) + ' echt: unilevel ' + eur(ref.uni) + ', Fast Start ' + eur(ref.fs) + ', leiderschapsbonus ' + eur(ref.glb) + ', samen ' + eur(ref.total) + '.</p>' : '') +
-    '<p class="small muted">Gebaseerd op het Europese plan: 8, 5 en 4% op vijf niveaus met compressie onder 100 PV, Fast Start 25% en 10% op de eerste drie maanden, en 1 PV als ongeveer €1. Het is een schatting en geen belofte van inkomen. De leiderschapsbonus, rangbonussen en afhoudingen zitten er niet in.</p></section>';
+    (ref ? '<p class="small muted">Ter vergelijking, ' + esc(mnm(ref.month)) + ' echt: unilevel ' + eur(ref.uni) + ', Fast Start ' + eur(ref.fs) + ', leiderschapsbonus ' + eur(ref.glb) + ', samen ' + eur(ref.total) + '.</p>' : '') +
+    (state.chAdd ? '<div class="mgdet"><label class="f" for="ch-m">Maand<select id="ch-m">' + opts + '</select></label><label class="f" for="ch-v">Totaal verdiend in euro<input id="ch-v" inputmode="decimal" placeholder="bijvoorbeeld 521,82"></label><div class="row"><button class="btn small" data-act="org-ch-save">Opslaan</button><button class="btn ghost small" data-act="org-ch-add">Annuleer</button></div></div>' : '<div class="row"><button class="btn ghost small" data-act="org-ch-add">Vorige maand toevoegen</button></div>') +
+    '<p class="small muted">Gebaseerd op het Europese plan: 8, 5 en 4% op vijf niveaus met compressie onder 100 PV, Fast Start 25% en 10% op de eerste drie maanden, en 1 PV als ongeveer €1. Het is een schatting en geen belofte van inkomen. De leiderschapsbonus, rangbonussen en afhoudingen zitten er niet in.</p>';
+  return gsec('comm', 'Commissie', body, null, true, '≈ ' + eur(est));
 }
 const ORG_FILTERS = { Klant: ['Actie nodig', 'Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'], Teamlid: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'] };
 function orgListHtml(kind) {
@@ -1656,6 +1677,9 @@ function orgAct(a, d) {
   if (a === 'org-kind') { const c0 = state.docs[d.id]; if (!c0) return true; save(d.id, Object.assign({}, c0, { kind: d.k, kindSet: true, updatedAt: new Date().toISOString() })); render(); toast(d.k === 'Teamlid' ? (c0.name + ' is nu teamlid.') : (c0.name + ' staat weer bij de klanten.')); return true; }
   if (a === 'org-filter') { state.orgf = d.f; state.orgmore = false; render(); return true; }
   if (a === 'org-mg-open') { state.mgOpen = !state.mgOpen; try { localStorage.setItem('lumo-mgopen', state.mgOpen ? '1' : ''); } catch (e) {} render(); return true; }
+  if (a === 'org-gopen') { state.gopen = Object.assign({}, state.gopen); state.gopen[d.k] = !gOpen(d.k, d.k === 'comm' || d.k === 'org' || d.k === 's:Deze maand in cijfers'); try { localStorage.setItem('lumo-gopen', JSON.stringify(state.gopen)); } catch (e) {} render(); return true; }
+  if (a === 'org-ch-add') { state.chAdd = !state.chAdd; render(); return true; }
+  if (a === 'org-ch-save') { const m = (document.getElementById('ch-m') || {}).value, v = parseFloat(String((document.getElementById('ch-v') || {}).value || '').replace(',', '.')); if (!m || !(v >= 0)) { toast('Vul een bedrag in.'); return true; } const h = Object.assign({}, state.docs.commhist || {}); h[m] = { total: v }; h.updatedAt = new Date().toISOString(); save('commhist', h); state.chAdd = false; render(); return true; }
   if (a === 'org-mg-edit') { state.mgEdit = true; render(); return true; }
   if (a === 'org-mg-cancel') { state.mgEdit = false; render(); return true; }
   if (a === 'org-mg-save') { const m = (document.getElementById('mg-m') || {}).value, v = parseInt((document.getElementById('mg-t') || {}).value, 10); if (!m || (!(v > 0) && m.indexOf('rank') !== 0)) { toast('Vul een doel in.'); return true; } save('mgoal', { metric: m, target: v > 0 ? v : RANKS[m.slice(4)].ogv, updatedAt: new Date().toISOString() }); state.mgEdit = false; render(); return true; }
