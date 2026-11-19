@@ -1389,10 +1389,18 @@ function orgPrio(c) {
 }
 
 /* ---------- Vandaag: maanddoel en Nu doen ---------- */
-const MG_METRICS = { pv: 'OGV', new: 'Nieuwe leden', act: 'Leden met bestelling' };
+const MG_METRICS = { pv: 'OGV', rankSilver: 'Rang Silver', rankGold: 'Rang Gold', new: 'Nieuwe leden', act: 'Leden met bestelling' };
+const RANKS = { Silver: { ogv: 10000, legs: 2, leg: 4000, pgv: 1000 }, Gold: { ogv: 35000, legs: 3, leg: 6000, pgv: 1000 } };
+const mgRank = g => g && g.metric.indexOf('rank') === 0 ? g.metric.slice(4) : '';
+const mgOgvMetric = g => g && (g.metric === 'pv' || !!mgRank(g));
+function mgLegs(r) {
+  const R = RANKS[r], legs = allContacts().filter(c => c.yl && Number(c.yl.lvl) === 1).map(c => ({ c, v: Math.round(c.yl.ogv || 0) })).sort((a, b) => b.v - a.v);
+  const top = legs.slice(0, R.legs), total = Math.round(allContacts().filter(c => c.yl && Number(c.yl.lvl) === 1).reduce((s, c) => s + (c.yl.ogv || 0), 0));
+  return { R, top, total, pgv: Math.max(0, total - top.reduce((s, x) => s + x.v, 0)) };
+}
 function mgNow(m) {
   const mk = todayKey().slice(0, 7), cs = allContacts().filter(c => c.yl);
-  if (m === 'pv') return Math.round(cs.reduce((s, c) => s + (c.yl.pv || 0), 0));
+  if (m === 'pv' || m.indexOf('rank') === 0) return Math.round(cs.reduce((s, c) => s + (c.yl.pv || 0), 0));
   if (m === 'new') return cs.filter(c => String(c.yl.since || '').slice(0, 7) === mk).length;
   return cs.filter(c => String(c.yl.last || '').slice(0, 7) === mk).length;
 }
@@ -1401,29 +1409,39 @@ function mgProj() {
   allContacts().forEach(c => { const y = c.yl; if (y && y.au && !y.aus && Number(y.au) >= d && y.aupv) { add += y.aupv; n++; } });
   return { add: Math.round(add), n };
 }
+function mgRankHtml(rk, proj) {
+  const L = mgLegs(rk), R = L.R, ok = x => '<span class="pill' + (x ? '' : ' due') + '">' + (x ? 'ok' : 'nog niet') + '</span>';
+  const row = (t, a, b, good) => '<div class="row" style="justify-content:space-between"><span>' + esc(t) + '</span><span class="small">' + a + (b ? ' / ' + b : '') + ' ' + ok(good) + '</span></div>';
+  return '<div class="mgrank"><p class="eyebrow" style="margin:10px 0 4px">Wat Silver vraagt</p>'.replace('Silver', rk) +
+    L.top.map((x, i) => row('Groep ' + (i + 1) + ': ' + x.c.name.replace(/\b\w/g, m => m.toUpperCase()).toLowerCase().replace(/(^|\s)\S/g, m => m.toUpperCase()), orgFmt(x.v), orgFmt(R.leg), x.v >= R.leg)).join('') +
+    (L.top.length < R.legs ? '<p class="small muted">Je hebt nog maar ' + L.top.length + ' groep' + (L.top.length === 1 ? '' : 'en') + ' met volume.</p>' : '') +
+    row('Buiten de groepen (PGV)', orgFmt(L.pgv), orgFmt(R.pgv), L.pgv >= R.pgv) +
+    '<p class="small muted">Eigen 100 PV controleer je zelf. PGV is een schatting en houdt geen rekening met Silver-leden in je groepen.</p></div>';
+}
 function mgHtml() {
   const g = state.docs.mgoal, t = todayKey(), dt = new Date(), dim = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate(), left = dim - dt.getDate() + 1;
   const mname = dt.toLocaleDateString('nl-NL', { month: 'long' });
   if (!g || state.mgEdit) {
     return '<section class="card mg"><p class="eyebrow">Doel voor ' + esc(mname) + '</p>' +
       '<div class="row" style="gap:8px;flex-wrap:wrap"><label class="f" style="flex:1;min-width:150px"><span class="sr">Wat meten</span><select id="mg-m">' + Object.keys(MG_METRICS).map(k => '<option value="' + k + '"' + (g && g.metric === k ? ' selected' : '') + '>' + MG_METRICS[k] + '</option>').join('') + '</select></label>' +
-      '<label class="f" style="width:110px"><span class="sr">Doel</span><input id="mg-t" type="number" inputmode="numeric" min="1" placeholder="Doel" value="' + (g ? g.target : '') + '"></label></div>' +
+      '<label class="f" style="width:150px"><span class="sr">Doel</span><input id="mg-t" type="number" inputmode="numeric" min="1" placeholder="Doel (bij rang leeg laten)" value="' + (g ? g.target : '') + '"></label></div>' +
       '<div class="row"><button class="btn" data-act="org-mg-save">Opslaan</button>' + (g ? '<button class="btn ghost" data-act="org-mg-cancel">Annuleer</button>' : '') + '</div>' +
       '<p class="small muted">De voortgang wordt automatisch uit je Virtual Office berekend en elke maand opnieuw geteld.</p></section>';
   }
-  const n = mgNow(g.metric), pj = g.metric === 'pv' ? mgProj() : null, pp = pj ? Math.min(100, Math.round((n + pj.add) / g.target * 100)) : 0, pct = Math.min(100, Math.round(n / g.target * 100)), need = Math.max(0, g.target - n), per = g.metric === 'pv' ? Math.ceil(need / left) : Math.max(0, need / left);
-  const pace = need <= 0 ? 'Doel gehaald' : 'nog ' + orgFmt(need) + (g.metric === 'pv' ? ' OGV' : '') + ' · ' + left + (left === 1 ? ' dag' : ' dagen') + (g.metric === 'pv' ? ' · ±' + orgFmt(per) + ' per dag' : '');
+  const og = mgOgvMetric(g), rk = mgRank(g), n = mgNow(g.metric), pj = og ? mgProj() : null, pp = pj ? Math.min(100, Math.round((n + pj.add) / g.target * 100)) : 0, pct = Math.min(100, Math.round(n / g.target * 100)), need = Math.max(0, g.target - n), per = og ? Math.ceil(need / left) : Math.max(0, need / left);
+  const pace = need <= 0 ? 'Doel gehaald' : 'nog ' + orgFmt(need) + (og ? ' OGV' : '') + ' · ' + left + (left === 1 ? ' dag' : ' dagen') + (og ? ' · ±' + orgFmt(per) + ' per dag' : '');
   return '<section class="card mg"><div class="row"><p class="eyebrow" style="margin:0">' + esc(mname) + ' · ' + esc(MG_METRICS[g.metric]) + '</p><span class="spacer"></span><button class="btn ghost small" data-act="org-mg-edit">Wijzig</button></div>' +
     '<div class="big">' + orgFmt(n) + ' <span class="small muted">/ ' + orgFmt(g.target) + '</span></div>' +
     '<div class="bar' + (n >= g.target ? ' full' : '') + '" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100" style="position:relative">' + (pj && pj.add ? '<i style="position:absolute;left:0;top:0;height:100%;width:' + pp + '%;opacity:.3"></i>' : '') + '<i style="position:relative;width:' + pct + '%"></i></div>' +
     '<p class="small">' + pct + '% · ' + esc(pace) + '</p>' +
-    (pj ? '<p class="small">Verwacht einde maand: <b>' + orgFmt(n + pj.add) + ' OGV</b> <span class="muted">(+' + orgFmt(pj.add) + ' uit ' + pj.n + ' geplande Loyalty Rewards' + (n + pj.add >= g.target ? ' · doel in zicht' : ' · nog ' + orgFmt(g.target - n - pj.add) + ' erbij nodig') + ')</span></p>' : '') + '</section>';
+    (pj ? '<p class="small">Verwacht einde maand: <b>' + orgFmt(n + pj.add) + ' OGV</b> <span class="muted">(+' + orgFmt(pj.add) + ' uit ' + pj.n + ' geplande Loyalty Rewards' + (n + pj.add >= g.target ? ' · doel in zicht' : ' · nog ' + orgFmt(g.target - n - pj.add) + ' erbij nodig') + ')</span></p>' : '') + (rk ? mgRankHtml(rk, n + (pj ? pj.add : 0)) : '') + '</section>';
 }
 function nuDoen() {
   const t = todayKey(), seen = {}, out = [], lim = addDays(t, -7);
   const add = (c, why, pr) => { if (!c || seen[c.id]) return; seen[c.id] = 1; out.push({ c, why, pr }); };
   const needs = allContacts().filter(c => c.yl).map(c => ({ c, n: orgNeeds(c) })).filter(x => x.n);
   needs.filter(x => x.n === 'LR niet verzonden').forEach(x => add(x.c, x.n, 0));
+  { const g = state.docs.mgoal, rk = mgRank(g); if (rk) { const L = mgLegs(rk); L.top.forEach((x, i) => { if (x.v < L.R.leg) add(x.c, 'Groep ' + (i + 1) + ' mist nog ' + orgFmt(L.R.leg - x.v) + ' OGV voor ' + rk, 0.5); }); } }
   voOrders().filter(e => (e.t === 'new' || e.t === 'conv' || e.t === 'stop') && String(e.at || '').slice(0, 10) >= lim && state.docs[e.cid]).forEach(e => add(Object.assign({ id: e.cid }, state.docs[e.cid]), voLabel(e), 1));
   dueContacts().forEach(c => add(c, 'Opvolging gepland', 2));
   needs.filter(x => x.n.indexOf('Bestelmoment') === 0).forEach(x => add(x.c, x.n, 3));
@@ -1516,7 +1534,7 @@ function orgAct(a, d) {
   if (a === 'org-filter') { state.orgf = d.f; state.orgmore = false; render(); return true; }
   if (a === 'org-mg-edit') { state.mgEdit = true; render(); return true; }
   if (a === 'org-mg-cancel') { state.mgEdit = false; render(); return true; }
-  if (a === 'org-mg-save') { const m = (document.getElementById('mg-m') || {}).value, v = parseInt((document.getElementById('mg-t') || {}).value, 10); if (!m || !(v > 0)) { toast('Vul een doel in.'); return true; } save('mgoal', { metric: m, target: v, updatedAt: new Date().toISOString() }); state.mgEdit = false; render(); return true; }
+  if (a === 'org-mg-save') { const m = (document.getElementById('mg-m') || {}).value, v = parseInt((document.getElementById('mg-t') || {}).value, 10); if (!m || (!(v > 0) && m.indexOf('rank') !== 0)) { toast('Vul een doel in.'); return true; } save('mgoal', { metric: m, target: v > 0 ? v : RANKS[m.slice(4)].ogv, updatedAt: new Date().toISOString() }); state.mgEdit = false; render(); return true; }
   if (a === 'org-more') { state.orgmore = true; render(); return true; }
   if (a === 'org-net') { state.netOpen = Object.assign({}, state.netOpen || {}); if (state.netOpen[d.id]) delete state.netOpen[d.id]; else state.netOpen[d.id] = true; render(); return true; }
   if (a === 'org-netf') { state.netf = d.f; render(); return true; }
