@@ -143,6 +143,7 @@ a{color:var(--brand);text-underline-offset:3px}
 .goalrow{display:grid;grid-template-columns:1fr 84px 44px;gap:8px;align-items:center}
 ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
 @media (prefers-reduced-motion:no-preference){.bar>i,.week .b{transition:all .25s ease}}
+/* EXTRA-START (wordt gevuld door tools/build.py uit src/parts/extra.css, hier niet handmatig aanpassen) */
 .seg{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none}
 .seg::-webkit-scrollbar{display:none}
 .seg .chip{flex:none}
@@ -191,12 +192,13 @@ a.btn{text-decoration:none}
 .kn:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 .kf{display:flex;gap:6px;flex-wrap:wrap}
 .ka{display:flex;gap:6px;flex-wrap:wrap}
+
 .pinfo{margin:6px 0;font-size:.9rem}.pinfo summary{cursor:pointer;color:var(--muted,#5b6b62)}.pinfo dl{display:grid;grid-template-columns:max-content 1fr;gap:2px 12px;margin:6px 0 0}.pinfo dt{color:var(--muted,#5b6b62)}.pinfo dd{margin:0;overflow-wrap:anywhere}.pinfo a{color:inherit;font-weight:600}
 
 .pill.lr{background:#dcefe3;color:#1F4D3A;font-weight:600}
 .contact.org .nm{font-size:1.05rem}
 .net{display:flex;flex-direction:column;gap:6px;margin-top:8px}
-.net-node{background:var(--card,#fff);border:1px solid var(--line,#e3e0d6);border-left:4px solid #9fb8a9;border-radius:12px;padding:8px 10px}
+.net-node{background:var(--surface,#fff);border:1px solid var(--line,#e3e0d6);border-left:4px solid #9fb8a9;border-radius:12px;padding:8px 10px}
 .net-node.l1{border-left-color:#1F4D3A}.net-node.l2{border-left-color:#3f7f5f}.net-node.l3{border-left-color:#6fa387}.net-node.l4{border-left-color:#a3c4b0}.net-node.l5,.net-node.l6,.net-node.l7,.net-node.l8{border-left-color:#cfe0d6}
 .net-tog{width:26px;height:26px;min-width:26px;border-radius:50%;border:1px solid var(--line,#cfd6cf);background:#fff;font-size:1rem;line-height:1;cursor:pointer;color:#1F4D3A;padding:0}
 .net-tog.sp{border:0;background:none;cursor:default}
@@ -228,6 +230,7 @@ a.btn{text-decoration:none}
 .ht{flex:1;background:var(--sage);border-radius:4px;height:10px}
 .ht i{display:block;height:100%;background:var(--brand);border-radius:4px}
 .hv{font-size:.8rem;min-width:56px;text-align:right;white-space:nowrap}
+
 .gsec-h{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;padding:0;min-height:40px;text-align:left;cursor:pointer;color:inherit;font:inherit}
 .gsec-h h2{margin:0}
 .gsec-chev{font-size:1.1rem;color:var(--muted)}
@@ -236,6 +239,7 @@ a.btn{text-decoration:none}
 .cbig{padding:2px 0 4px}
 .gcv{font-style:normal;font-size:.7rem;color:var(--muted)}
 .grb.est{background:var(--sage);opacity:.55;outline:1px dashed var(--brand)}
+/* EXTRA-END */
 </style>
 </head>
 <body>

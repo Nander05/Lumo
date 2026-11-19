@@ -1,0 +1,6 @@
+{
+  "name": "lumo",
+  "private": true,
+  "scripts": { "build": "python3 tools/build.py", "test": "node tools/smoke.js", "release": "bash tools/release.sh" },
+  "devDependencies": { "jsdom": "^31.0.0" }
+}

@@ -14,6 +14,19 @@ Lumo als gewone webapp: iedereen krijgt een link en een eigen inlog, zonder Clau
 | `seed/library.sql` | zet de 12 Young Living-teksten in de bibliotheek van je team |
 | `privacy.html` | concept-privacyverklaring (invullen en laten nalezen) |
 
+## Ontwikkelen
+
+De echte broncode staat in `src/parts/`. `app.js` en het CSS-blok in `index.html` worden daaruit gebouwd en nooit met de hand aangepast.
+
+```
+npm install        # eenmalig, voor de test
+npm run build      # bouwt app.js en zet src/parts/extra.css in index.html
+npm test           # rooktest met nepgegevens
+bash tools/release.sh "wat is er veranderd"   # bouwt, test, verhoogt de cacheversie, commit en push
+```
+
+Meer uitleg over de opbouw staat in `docs/ARCHITECTUUR.md`.
+
 ## Opzetten (ongeveer 45 minuten, eenmalig)
 
 ### 1. Supabase (inlog en database)

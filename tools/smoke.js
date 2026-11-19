@@ -1,0 +1,51 @@
+const { JSDOM } = require('jsdom'); const fs = require('fs');
+const dir = require('path').join(__dirname, '..') + '/';
+let html = fs.readFileSync(dir + 'index.html', 'utf8').replace(/<script src="[^"]*"><\/script>/g, '').replace(/<script>if\("serviceWorker".*?<\/script>/s, '');
+const errors = [];
+const dom = new JSDOM(html, { runScripts: 'dangerously', pretendToBeVisual: true, url: 'https://x.test/' });
+const w = dom.window; w.scrollTo = () => {}; w.Element.prototype.scrollIntoView = () => {};
+w.addEventListener('error', e => errors.push('ERR ' + e.message));
+{ const sc = w.document.createElement('script'); sc.textContent = fs.readFileSync(dir + 'app.js', 'utf8').replace("(async function start()", "(async function startX()"); w.document.body.appendChild(sc); }
+const seed = () => {
+  const t = w.eval('todayKey()'); const docs = {};
+  const mk = (id, name, kind, yl, extra) => { docs[id] = Object.assign({ name, kind, org: true, stage: 'Gestart', yl }, extra || {}); };
+  mk('contact-a', 'ANNA TEST', 'Klant', { mid: '1', pm: '', lvl: 1, pv: 100, ogv: 0, au: '5', aus: false, mwo: 0, last: t.slice(0, 7) + '-01T10:00:00', lpv: 100, aupv: 100, since: '2021-01-01T00:00:00' }, { lastOrder: t.slice(0, 7) + '-01', cycle: '30' });
+  mk('contact-b', 'BERT TEAM', 'Teamlid', { mid: '2', pm: '1', lvl: 2, pv: 50, ogv: 900, au: '', mwo: 4, last: '2026-07-01T10:00:00', lpv: 80, since: '2026-11-10T00:00:00' });
+  mk('contact-c', 'CARLA', 'Klant', { mid: '3', pm: '1', lvl: 2, pv: 0, ogv: 0, au: '', mwo: 4, last: '2026-07-01T10:00:00', lpv: 80, since: '2020-01-01T00:00:00' });
+  docs.profile = { name: 'Nander', goal: 'x', why: 'y', tone: 'warm', lang: 'nl', goals: [{ id: 'g1', label: 'Gesprekken', target: 1 }], consentAt: new Date().toISOString(), createdAt: new Date().toISOString() };
+  docs['contact-p'] = { name: 'PIET PROSPECT', kind: 'Prospect', stage: 'Nieuw' };
+  w.eval('state.docs = ' + JSON.stringify(docs) + '; state.ready = true; state.view = "mensen";');
+};
+seed();
+const text = () => w.document.querySelector('#app').textContent;
+const expect = (c, m) => console.log((c ? 'ok   ' : 'FAIL ') + m);
+for (const s of ['Prospects', 'Klanten', 'Organisatie', 'Workshops']) { try { w.eval('state.sub.mensen = ' + JSON.stringify(s) + '; render();'); console.log(s, '->', text().replace(/\s+/g, ' ').slice(0, 160)); } catch (e) { errors.push(s + ' ' + e.message); } }
+w.eval('state.sub.mensen="Klanten"; state.orgf="Alles"; render()'); expect(/ANNA TEST/.test(text()) && /Wat nu\?/.test(text()), 'klanten tonen kaart met Wat nu?'); expect(!/Organisatie importeren/.test(text()), 'import-knop weg');
+w.eval('state.orgf="Actie nodig"; render()'); console.log('actie nodig:', text().replace(/\s+/g, ' ').slice(0, 200));
+w.eval('state.sub.mensen="Organisatie"; state.netf="Team"; render()'); expect(/BERT TEAM/.test(text()) && !/ANNA TEST/.test(text()), 'team-filter');
+w.eval('state.netf="Nieuw"; render()'); expect(/BERT TEAM/.test(text()), 'nieuw-filter');
+w.eval('state.netf="Boom"; render()'); expect(/ANNA TEST/.test(text()), 'boom');
+w.eval('state.dialog={type:"contact",id:"contact-a"}; render()'); expect(/Wat nu\?/.test(text()) && /Maak teamlid/.test(text()), 'contactdialoog met Wat nu? en teamlid');
+w.eval('state.dialog=null; window.__deep={open:"contact-a",e:"order"}; deepGo(window.__deep)'); console.log('deep ->', w.eval('state.view'));
+w.eval('state.dialog=null; state.view="vandaag"; render()'); expect(/Doel voor/.test(text()) && /Opslaan/.test(text()), 'vandaag: maanddoel invullen');
+w.eval('save("mgoal",{metric:"pv",target:1000}); render()'); console.log('vandaag:', text().replace(/\s+/g,' ').slice(0,420)); expect(/OGV/.test(text()) && /Nu doen/.test(text()) && /Wat nu\?/.test(text()), 'vandaag: maanddoel + Nu doen');
+expect(!/Jouw doel:/.test(text()), 'vandaag: lange termijndoel weg');
+w.eval('state.mgEdit=true; render()'); expect(/Annuleer/.test(text()), 'maanddoel wijzigen');
+w.eval('state.mgEdit=false; state.view="groei"; render()'); expect(/lange termijndoel/.test(text()), 'groei toont lange termijndoel');
+w.eval('save("mgoal",{metric:"rankSilver",target:10000}); state.view="vandaag"; state.mgEdit=false; state.docs["contact-a"].yl.ogv=2898.7; state.docs["contact-c"].yl.lvl=1; state.docs["contact-c"].yl.ogv=4100; state.mgOpen=true; render()'); console.log('rank:', text().replace(/\s+/g,' ').slice(100,760));
+expect(/Wat Silver vraagt/.test(text()) && /Groep 1/.test(text()) && /Buiten de groepen/.test(text()) && /mist nog/.test(text()), 'rangdoel Silver met groepen');
+w.eval('state.mgEdit=true; render()'); expect(/Rang Gold/.test(text()), 'rang Gold keuze');
+w.eval('state.mgEdit=false; render()');
+w.eval('state.view="coach"; state.coach.more=false; state.coach.msgs=[]; render()'); console.log('coach:', text().replace(/\s+/g,' ').slice(95,520)); expect(/Wat zal ik voor je doen/.test(text()) && /Wat mist Silver|mist nog|geen bestelling/.test(text()) && !/Inspreken/.test(text()), 'coach: voorstellen uit Nu doen');
+w.eval('state.coach.more=true; render()'); expect(/Rollenspel/.test(text()) && /Compliance-check/.test(text()), 'coach: Meer met rollenspel en controle');
+w.eval('state.coach.more=false; state.view="groei"; state.sub.groei="Controle"; render()'); expect(!/Compliance-check/.test(text()) && !/Cijfers/.test(text()), 'groei zonder Controle- en Cijfers-tab');
+w.eval('state.sub.groei="Trend"; state.view="groei"; render()'); console.log('trend:', text().replace(/\s+/g,' ').slice(95,560)); expect(/Je organisatie/.test(text()) && /Je groepen/.test(text()) && /Loyalty Rewards/.test(text()) && /Niveaus/.test(text()) && /Grootste bestellers/.test(text()) && !/Content/.test(text().replace(/Nieuwe leden/,'')), 'groei: uitgebreide trend zonder tabs');
+try { const q = w.eval('legPrompt(Object.assign({id:"contact-c"}, state.docs["contact-c"]))'); console.log('leg:', q.slice(0, 330)); expect(/ontbreekt nog/.test(q) && /Loyalty Rewards/.test(q), 'groepsvraag voor de coach'); } catch (e) { console.log('FAIL leg', e.message); }
+w.eval('state.docs.commref={month:"2026-10",uni:340.24,fs:128.63,glb:52.94,total:521.82}; state.sub.groei="Trend"; state.view="groei"; render()'); { const m = text().match(/Commissie \(schatting\).{0,420}/); console.log('comm:', m && m[0]); } expect(/Verwacht deze maand/.test(text()) && /Unilevel/.test(text()) && /Fast Start/.test(text()) && /echt/.test(text()), 'commissieblok');
+w.eval('state.gopen={}; render()'); expect(/Verwacht deze maand/.test(text()) && /Je organisatie/.test(text()) && !/Nieuwe leden \(45 dagen\)\s*[^\s]*Er zijn|Grootste bestellers deze maand.{0,3}Nog geen/.test(text()), 'secties standaard');
+w.eval('document.querySelector("[data-k=\'s:Niveaus\']").click()'); expect(/Hoe diep je organisatie gaat/.test(text()), 'sectie uitklappen'); w.eval('document.querySelector("[data-k=\'s:Niveaus\']").click()'); expect(!/Hoe diep je organisatie gaat/.test(text()), 'sectie inklappen');
+w.eval('document.querySelector("[data-k=\'comm\']").click()'); expect(!/Verwacht deze maand/.test(text()), 'commissie inklappen'); w.eval('document.querySelector("[data-k=\'comm\']").click()');
+expect(w.document.querySelectorAll('.gcv').length === 6 && /Vorige maand toevoegen/.test(text()), 'commissiegrafiek 6 maanden');
+w.eval('document.querySelector("[data-act=\'org-ch-add\']").click()'); expect(/Totaal verdiend/.test(text()), 'maand toevoegen formulier');
+console.log(errors.length ? errors : 'geen fouten');
+process.exit(0);

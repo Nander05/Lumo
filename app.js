@@ -1398,7 +1398,15 @@ function orgPrio(c) {
 /* ---------- Vandaag: maanddoel en Nu doen ---------- */
 try { state.mgOpen = localStorage.getItem('lumo-mgopen') === '1'; } catch (e) {}
 const MG_METRICS = { pv: 'OGV', rankSilver: 'Rang Silver', rankGold: 'Rang Gold', new: 'Nieuwe leden', act: 'Leden met bestelling' };
-const RANKS = { Silver: { ogv: 10000, legs: 2, leg: 4000, pgv: 1000 }, Gold: { ogv: 35000, legs: 3, leg: 6000, pgv: 1000 } };
+/* Regels van het Europese compensatieplan op één plek. Bron: openbare YL-plantekst plus controle tegen YL Insights (19 nov 2026).
+   Controle: unilevel EUR 328 en persoonlijke generatie EUR 124 kwamen uit op EUR 327 en EUR 124. Fast Start gaf EUR 21 tegen EUR 18 bij YL.
+   Niet gemodelleerd: leiderschapsbonus (gedeelde pot), rangbonussen, generaties 2 tot 4, eigen 100 PV, afhoudingen. */
+const PLAN = {
+  ranks: { Silver: { ogv: 10000, legs: 2, leg: 4000, pgv: 1000 }, Gold: { ogv: 35000, legs: 3, leg: 6000, pgv: 1000 } },
+  unilevel: [0.08, 0.05, 0.04, 0.04, 0.04], depthByOgv: [[4000, 5], [2000, 4], [500, 3], [0, 2]], qualPv: 100,
+  fastStart: { l1: 0.25, l2: 0.10, minPv: 50, months: 3, otherPayoutShare: 0.3 }, personalGeneration: 0.025, eurPerPv: 0.875
+};
+const RANKS = PLAN.ranks;
 const mgRank = g => g && g.metric.indexOf('rank') === 0 ? g.metric.slice(4) : '';
 const mgOgvMetric = g => g && (g.metric === 'pv' || !!mgRank(g));
 function mgLegs(r) {
@@ -1544,16 +1552,16 @@ function groeiOverzichtHtml() {
 }
 
 /* ---------- Commissie (schatting op basis van het Europese compensatieplan) ---------- */
-const COMM_RATES = [0.08, 0.05, 0.04, 0.04, 0.04], COMM_EUR = 0.875;
+const COMM_RATES = PLAN.unilevel, COMM_EUR = PLAN.eurPerPv;
 function commEst(scen) {
-  const N = orgNodes(), d = new Date(), td = d.getDate(), x = new Date(d.getFullYear(), d.getMonth() - 2, 1), lim = x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-01';
+  const N = orgNodes(), d = new Date(), td = d.getDate(), x = new Date(d.getFullYear(), d.getMonth() - (PLAN.fastStart.months - 1), 1), lim = x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-01';
   const base = c => scen === 'now' ? (c.yl.pv || 0) : (c.yl.pv || 0) + (c.yl.au && !c.yl.aus && Number(c.yl.au) >= td ? (c.yl.aupv || 0) : 0);
-  const isFs = c => String(c.yl.since || '').slice(0, 10) >= lim && base(c) >= 50, vol = c => isFs(c) ? base(c) * 0.3 : base(c);
+  const isFs = c => String(c.yl.since || '').slice(0, 10) >= lim && base(c) >= PLAN.fastStart.minPv, vol = c => isFs(c) ? base(c) * PLAN.fastStart.otherPayoutShare : base(c);
   const per = [0, 0, 0, 0, 0]; let fs = 0, all = 0;
   const walk = (n, level, carry) => {
     const kids = N.kids.get(n.id) || [], v = vol(n); all += vol(n);
-    if (isFs(n)) { if (Number(n.yl.lvl) === 1) fs += base(n) * 0.25; else if (Number(n.yl.lvl) === 2) fs += base(n) * 0.10; }
-    if (base(n) >= 100) { if (level <= 5) per[level - 1] += v + carry; kids.forEach(k => walk(k, level + 1, 0)); }
+    if (isFs(n)) { if (Number(n.yl.lvl) === 1) fs += base(n) * PLAN.fastStart.l1; else if (Number(n.yl.lvl) === 2) fs += base(n) * PLAN.fastStart.l2; }
+    if (base(n) >= PLAN.qualPv) { if (level <= 5) per[level - 1] += v + carry; kids.forEach(k => walk(k, level + 1, 0)); }
     else {
       const best = kids.slice().sort((a, b) => base(b) - base(a))[0];
       if (!kids.length) { if (level <= 5) per[level - 1] += v + carry; }
@@ -1561,9 +1569,9 @@ function commEst(scen) {
     }
   };
   N.roots.forEach(r => walk(r, 1, 0));
-  const og = Math.round(all), depth = og >= 4000 ? 5 : og >= 2000 ? 4 : og >= 500 ? 3 : 2;
+  const og = Math.round(all), depth = PLAN.depthByOgv.find(x => og >= x[0])[1];
   const uni = per.reduce((a, v, i) => a + (i < depth ? v * COMM_RATES[i] : 0), 0) * COMM_EUR;
-  return { per, uni: Math.round(uni * 100) / 100, fs: Math.round(fs * COMM_EUR * 100) / 100, gen: Math.round(all * 0.025 * COMM_EUR * 100) / 100, depth };
+  return { per, uni: Math.round(uni * 100) / 100, fs: Math.round(fs * COMM_EUR * 100) / 100, gen: Math.round(all * PLAN.personalGeneration * COMM_EUR * 100) / 100, depth };
 }
 const eur = v => '€' + (Math.round(v * 100) / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 try { state.gopen = JSON.parse(localStorage.getItem('lumo-gopen') || '{}'); } catch (e) { state.gopen = {}; }
