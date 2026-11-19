@@ -386,18 +386,14 @@ function viewVandaag() {
     return '<div class="col"><div class="b' + (r > 0 ? ' on' : '') + (i === 0 ? ' today' : '') + '" style="height:' + h + 'px" role="img" aria-label="' + d.toLocaleDateString('nl-NL', { weekday: 'long' }) + ' ' + Math.round(r * 100) + ' procent"></div><span>' + d.toLocaleDateString('nl-NL', { weekday: 'short' }).slice(0, 2) + '</span></div>';
   }).join('');
   const row = (name, tag, id) => '<div class="row"><b>' + esc(name) + '</b>' + tag + '<span class="spacer"></span><button class="btn ghost small" data-act="contact-edit" data-id="' + id + '">Open</button></div>';
-  return '<div><p class="eyebrow">' + esc(longDate()) + '</p><h1>' + greeting() + ', ' + esc(p.name) + '</h1>' + (p.goal ? '<p class="muted" style="margin-top:6px">Jouw doel: ' + esc(p.goal) + '</p>' : '') + '</div>' +
-    '<section class="card" aria-labelledby="h-ass"><h2 id="h-ass">Mijn assistent</h2><div class="row"><button class="btn" data-act="brief-run"' + (state.brief && state.brief.busy ? ' disabled' : '') + '>Ochtendbriefing</button>' +
-    coachBtn('Avondcheck-in', 'Doe een korte avondcheck-in met me. Stel me één voor één drie korte vragen: wat ging goed, wat vroeg energie, en wat is morgen de eerste stap. Begin met de eerste vraag.') +
+  const assist = '<section class="card" aria-labelledby="h-ass"><h2 id="h-ass">Mijn assistent</h2><div class="row"><button class="btn" data-act="brief-run"' + (state.brief && state.brief.busy ? ' disabled' : '') + '>Ochtendbriefing</button>' +
     coachBtn('Weekreview', 'Maak een weekreview: wat ging goed, wat bleef liggen, en een plan voor volgende week met maximaal drie prioriteiten. Gebruik mijn dagcijfers en pipeline.') + '</div>' +
-    (state.brief ? '<div class="brief" id="brief" aria-live="polite">' + (state.brief.text ? md(state.brief.text) : '<p class="muted">De briefing wordt gemaakt…</p>') + '</div>' : '<p class="small muted">Eén klik geeft je een plan voor vandaag, op basis van je doelen, mensen en agenda.</p>') + '</section>' +
-    '<section class="card" aria-labelledby="h-dag"><h2 id="h-dag">Dagdoelen</h2>' + goals + '</section>' + (typeof webInboxBanner === 'function' ? webInboxBanner() : '') + voFeedHtml() + campToday() +
-    '<div class="grid2"><section class="card soft" aria-labelledby="h-streak"><h2 id="h-streak" class="eyebrow">Reeks</h2><div class="big">' + streak() + '</div><p class="small">dagen achter elkaar actief</p></section>' +
-    '<section class="card" aria-labelledby="h-week"><h2 id="h-week" class="eyebrow">Afgelopen 7 dagen</h2><div class="week">' + days + '</div></section></div>' +
-    '<section class="card" aria-labelledby="h-due"><h2 id="h-due">Vandaag opvolgen</h2>' +
-    (due.length ? due.slice(0, 6).map(c => row(c.name, pill(c.kind || 'Prospect') + pill(c.stage, 'due'), c.id)).join('') : '<p class="muted">Niemand staat voor vandaag gepland.</p>') + '</section>' +
-    (q.length ? '<section class="card" aria-labelledby="h-quiet"><h2 id="h-quiet">Opvolging met reden</h2>' + q.map(x => '<div class="row"><b>' + esc(x.c.name) + '</b><span class="small muted">' + esc(x.why) + '</span><span class="spacer"></span>' + coachBtn('Bericht', 'Schrijf een kort bericht voor ' + x.c.name + ' (' + (x.c.kind || 'Prospect') + ', fase ' + x.c.stage + '). Reden: ' + x.why + '. ' + (x.c.note ? 'Notitie: ' + x.c.note + '. ' : '') + 'Het bericht moet nieuwe, nuttige informatie voor haar situatie bevatten of een nieuwe afspraak voorstellen. Geen check-in. Staat er in mijn gegevens niets om aan te bieden, zeg dat dan en vraag me wat ik haar kan geven. Geef één concept en zeg erbij welke waarde of afspraak erin zit.') + '</div>').join('') + '</section>' : '') +
+    (state.brief ? '<div class="brief" id="brief" aria-live="polite">' + (state.brief.text ? md(state.brief.text) : '<p class="muted">De briefing wordt gemaakt…</p>') + '</div>' : '') + '</section>';
+  return '<div><p class="eyebrow">' + esc(longDate()) + '</p><h1>' + greeting() + ', ' + esc(p.name) + '</h1></div>' + mgHtml() + nuDoenHtml() +
+    '<section class="card" aria-labelledby="h-dag"><h2 id="h-dag">Dagdoelen</h2>' + goals + '</section>' + (typeof webInboxBanner === 'function' ? webInboxBanner() : '') + campToday() +
     '<section class="card" aria-labelledby="h-up"><h2 id="h-up">Binnenkort</h2>' + (up.length ? up.map(u => '<div class="row"><span class="pill">' + esc(fmtDate(u.date)) + '</span><span>' + esc(u.text) + '</span></div>').join('') : '<p class="muted">De komende tien dagen staat er niets gepland.</p>') + '</section>' +
+    '<div class="grid2"><section class="card soft" aria-labelledby="h-streak"><h2 id="h-streak" class="eyebrow">Reeks</h2><div class="big">' + streak() + '</div><p class="small">dagen achter elkaar actief</p></section>' +
+    '<section class="card" aria-labelledby="h-week"><h2 id="h-week" class="eyebrow">Afgelopen 7 dagen</h2><div class="week">' + days + '</div></section></div>' + assist + voFeedHtml() +
     (nl ? '<section class="card gold"><h2>Nieuw in de bibliotheek</h2><p>' + nl + ' tekst' + (nl > 1 ? 'en zijn' : ' is') + ' nieuw of bijgewerkt sinds je laatste bezoek.</p><div><button class="btn ghost small" data-act="goto" data-view="team" data-sub="Bibliotheek">Bekijk</button></div></section>' : '');
 }
 
@@ -522,7 +518,7 @@ function viewGroei() {
     }
     body = '<section class="card" aria-labelledby="h-fig"><div class="row"><h2 id="h-fig">Mijn cijfers</h2><span class="spacer"></span>' + (f ? '<button class="btn danger small" data-act="fig-clear">Verwijder</button>' : '') + '<label class="btn ghost small" for="figfile" style="cursor:pointer">CSV laden</label><input id="figfile" class="sr" type="file" accept=".csv,.txt,text/csv" data-change="fig-file"></div>' + figHTML + '</section>' + rank;
   }
-  return '<h1>Groei</h1>' + subTabs('groei') + body;
+  return '<h1>Groei</h1>' + (profile() && profile().goal ? '<section class="card soft"><p class="eyebrow">Mijn lange termijndoel</p><p>' + esc(profile().goal) + '</p></section>' : '') + subTabs('groei') + body;
 }
 const FLAG_INCOME = /(verdien\w*|passief inkomen|financi[eë]le vrijheid|financieel vrij|stop met werken|extra inkomen|rijk worden|gegarandeerd\w*|garantie|zeker succes|ontslag\w*)/gi;
 const FLAG_HEALTH = /(genees\w*|geneeskrachtig\w*|behandel\w*|kanker|depressi\w*|angststoornis\w*|diabet\w*|ontsteking\w*|virus\w*|covid|corona|medicij\w*|ontgift\w*|voorkom\w*|beschermt tegen|vermindert pijn|slaapprobleem\w*|slaapproblemen|burn-out|adhd|autisme|allergie\w*)/gi;
@@ -1391,6 +1387,50 @@ function orgPrio(c) {
   if (n.indexOf('Bestelmoment') === 0) return 1;
   return n ? 2 : 3;
 }
+
+/* ---------- Vandaag: maanddoel en Nu doen ---------- */
+const MG_METRICS = { pv: 'Team-PV', new: 'Nieuwe leden', act: 'Leden met bestelling' };
+function mgNow(m) {
+  const mk = todayKey().slice(0, 7), cs = allContacts().filter(c => c.yl);
+  if (m === 'pv') return Math.round(cs.reduce((s, c) => s + (c.yl.pv || 0), 0));
+  if (m === 'new') return cs.filter(c => String(c.yl.since || '').slice(0, 7) === mk).length;
+  return cs.filter(c => String(c.yl.last || '').slice(0, 7) === mk).length;
+}
+function mgHtml() {
+  const g = state.docs.mgoal, t = todayKey(), dt = new Date(), dim = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate(), left = dim - dt.getDate() + 1;
+  const mname = dt.toLocaleDateString('nl-NL', { month: 'long' });
+  if (!g || state.mgEdit) {
+    return '<section class="card mg"><p class="eyebrow">Doel voor ' + esc(mname) + '</p>' +
+      '<div class="row" style="gap:8px;flex-wrap:wrap"><label class="f" style="flex:1;min-width:150px"><span class="sr">Wat meten</span><select id="mg-m">' + Object.keys(MG_METRICS).map(k => '<option value="' + k + '"' + (g && g.metric === k ? ' selected' : '') + '>' + MG_METRICS[k] + '</option>').join('') + '</select></label>' +
+      '<label class="f" style="width:110px"><span class="sr">Doel</span><input id="mg-t" type="number" inputmode="numeric" min="1" placeholder="Doel" value="' + (g ? g.target : '') + '"></label></div>' +
+      '<div class="row"><button class="btn" data-act="org-mg-save">Opslaan</button>' + (g ? '<button class="btn ghost" data-act="org-mg-cancel">Annuleer</button>' : '') + '</div>' +
+      '<p class="small muted">De voortgang wordt automatisch uit je Virtual Office berekend en elke maand opnieuw geteld.</p></section>';
+  }
+  const n = mgNow(g.metric), pct = Math.min(100, Math.round(n / g.target * 100)), need = Math.max(0, g.target - n), per = g.metric === 'pv' ? Math.ceil(need / left) : Math.max(0, need / left);
+  const pace = need <= 0 ? 'Doel gehaald' : 'nog ' + orgFmt(need) + (g.metric === 'pv' ? ' PV' : '') + ' · ' + left + (left === 1 ? ' dag' : ' dagen') + (g.metric === 'pv' ? ' · ±' + orgFmt(per) + ' per dag' : '');
+  return '<section class="card mg"><div class="row"><p class="eyebrow" style="margin:0">' + esc(mname) + ' · ' + esc(MG_METRICS[g.metric]) + '</p><span class="spacer"></span><button class="btn ghost small" data-act="org-mg-edit">Wijzig</button></div>' +
+    '<div class="big">' + orgFmt(n) + ' <span class="small muted">/ ' + orgFmt(g.target) + '</span></div>' +
+    '<div class="bar' + (n >= g.target ? ' full' : '') + '" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100"><i style="width:' + pct + '%"></i></div>' +
+    '<p class="small">' + pct + '% · ' + esc(pace) + '</p></section>';
+}
+function nuDoen() {
+  const t = todayKey(), seen = {}, out = [], lim = addDays(t, -7);
+  const add = (c, why, pr) => { if (!c || seen[c.id]) return; seen[c.id] = 1; out.push({ c, why, pr }); };
+  const needs = allContacts().filter(c => c.yl).map(c => ({ c, n: orgNeeds(c) })).filter(x => x.n);
+  needs.filter(x => x.n === 'LR niet verzonden').forEach(x => add(x.c, x.n, 0));
+  voOrders().filter(e => (e.t === 'new' || e.t === 'conv' || e.t === 'stop') && String(e.at || '').slice(0, 10) >= lim && state.docs[e.cid]).forEach(e => add(Object.assign({ id: e.cid }, state.docs[e.cid]), voLabel(e), 1));
+  dueContacts().forEach(c => add(c, 'Opvolging gepland', 2));
+  needs.filter(x => x.n.indexOf('Bestelmoment') === 0).forEach(x => add(x.c, x.n, 3));
+  needs.filter(x => x.n.indexOf('mnd') > -1).forEach(x => add(x.c, x.n, 4));
+  return out.sort((a, b) => a.pr - b.pr);
+}
+function nuDoenHtml() {
+  const l = nuDoen(), top = l.slice(0, 5);
+  if (!l.length) return '<section class="card soft"><h2>Nu doen</h2><p class="muted">Niets dringends. Goed bezig.</p></section>';
+  return '<section aria-labelledby="h-nu"><h2 id="h-nu" style="margin:6px 0">Nu doen <span class="small muted">' + l.length + '</span></h2><div class="orgl">' +
+    top.map(x => '<div class="orgc"><button class="orgc-main" data-act="contact-edit" data-id="' + x.c.id + '"><b>' + esc(x.c.name) + '</b><span class="orgc-why due">' + esc(x.why) + '</span></button><button class="btn small" data-act="org-now" data-id="' + x.c.id + '">Wat nu?</button></div>').join('') + '</div>' +
+    (l.length > 5 ? '<div class="row" style="margin-top:8px"><button class="btn ghost small" data-act="goto" data-view="mensen" data-sub="Klanten">Alle ' + l.length + ' bekijken</button></div>' : '') + '</section>';
+}
 const ORG_FILTERS = { Klant: ['Actie nodig', 'Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'], Teamlid: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'] };
 function orgListHtml(kind) {
   kind = kind || (state.sub.mensen === 'Klanten' ? 'Klant' : 'Teamlid');
@@ -1468,6 +1508,9 @@ function orgYlHtml(c, cid) {
 function orgAct(a, d) {
   if (a === 'org-kind') { const c0 = state.docs[d.id]; if (!c0) return true; save(d.id, Object.assign({}, c0, { kind: d.k, kindSet: true, updatedAt: new Date().toISOString() })); render(); toast(d.k === 'Teamlid' ? (c0.name + ' is nu teamlid.') : (c0.name + ' staat weer bij de klanten.')); return true; }
   if (a === 'org-filter') { state.orgf = d.f; state.orgmore = false; render(); return true; }
+  if (a === 'org-mg-edit') { state.mgEdit = true; render(); return true; }
+  if (a === 'org-mg-cancel') { state.mgEdit = false; render(); return true; }
+  if (a === 'org-mg-save') { const m = (document.getElementById('mg-m') || {}).value, v = parseInt((document.getElementById('mg-t') || {}).value, 10); if (!m || !(v > 0)) { toast('Vul een doel in.'); return true; } save('mgoal', { metric: m, target: v, updatedAt: new Date().toISOString() }); state.mgEdit = false; render(); return true; }
   if (a === 'org-more') { state.orgmore = true; render(); return true; }
   if (a === 'org-net') { state.netOpen = Object.assign({}, state.netOpen || {}); if (state.netOpen[d.id]) delete state.netOpen[d.id]; else state.netOpen[d.id] = true; render(); return true; }
   if (a === 'org-netf') { state.netf = d.f; render(); return true; }
