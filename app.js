@@ -1535,12 +1535,48 @@ function groeiOverzichtHtml() {
     '<p class="small muted">Nieuwe leden en het totaal lopen terug in de tijd. OGV en bestellingen worden bijgehouden vanaf november. De huidige maand is nog niet af.</p>' +
     '<div class="row"><button class="btn small" data-act="coach-chip" data-prompt="' + esc(facts) + '">Wat zeggen mijn cijfers?</button></div></section>' +
     sec('Deze maand in cijfers', '<div class="ostats" style="padding:4px 0"><div class="ost"><b>' + orgFmt(ogvNow || 0) + '</b><span class="small muted">OGV nu</span></div><div class="ost"><b>' + orgFmt((ogvNow || 0) + pj.add) + '</b><span class="small muted">verwacht</span></div><div class="ost"><b>' + act + '</b><span class="small muted">besteld</span></div><div class="ost"><b>' + orgFmt(pvAvg) + '</b><span class="small muted">gem. PV</span></div></div>', 'Verwacht = huidige OGV plus de Loyalty Rewards die nog gepland staan. Gem. PV is per lid dat besteld heeft.') +
+    commHtml() +
     sec('Je groepen', grBars(legs.slice(0, 8).map(x => ({ l: grNm(x.c.name), v: x.v, t: orgFmt(x.v) + ' · ' + Math.round(x.v / legTot * 100) + '%' }))) + '<p class="small muted" style="margin-top:6px">Per groep: ' + legs.slice(0, 8).map(x => grNm(x.c.name).split(' ')[0] + ' ' + x.n + ' mensen, ' + x.act + ' besteld, ' + x.lr + ' LR').join(' · ') + '</p>', 'Een groep is een eerste-lijnspersoon met zijn of haar hele downline. Het percentage is het aandeel in je OGV.') +
     sec('Loyalty Rewards', '<div class="ostats" style="padding:4px 0"><div class="ost"><b>' + lr.length + '</b><span class="small muted">actief</span></div><div class="ost"><b>' + lrShip + '</b><span class="small muted">verzonden</span></div><div class="ost"><b>' + (lr.length - lrShip - lrFail) + '</b><span class="small muted">nog gepland</span></div><div class="ost"><b>' + lrFail + '</b><span class="small muted">niet verzonden</span></div></div><p class="small">Nog te verwachten uit gepland: <b>' + orgFmt(pj.add) + ' PV</b>. ' + Math.round(lr.length / cs.length * 100) + '% van je mensen heeft Loyalty Rewards.</p>') +
     sec('Wanneer bestelden ze voor het laatst', grBars(Object.keys(bk).map(k => ({ l: k, v: bk[k], t: String(bk[k]) })))) +
     sec('Niveaus', grBars(lvKeys.map(k => ({ l: 'Niveau ' + k, v: lv[k].n, t: lv[k].n + ' · ' + lv[k].a + ' besteld' }))), 'Hoe diep je organisatie gaat en hoeveel mensen per niveau actief zijn.') +
     sec('Nieuwe leden (45 dagen)', nieuw.length ? '<p class="small">' + nBest + ' van ' + nieuw.length + ' hebben al besteld.</p>' + nieuw.slice(0, 8).map(c => '<div class="hb"><span class="hl" style="width:55%">' + esc(grNm(c.name)) + '</span><span class="small muted" style="flex:1">' + esc(fmtDate(String(c.yl.since).slice(0, 10))) + '</span><span class="hv">' + (c.yl.last && String(c.yl.last).slice(0, 10) >= String(c.yl.since).slice(0, 10) ? 'besteld' : 'nog niet') + '</span></div>').join('') : '<p class="muted">Geen nieuwe leden in de laatste 45 dagen.</p>') +
     sec('Grootste bestellers deze maand', top.length ? grBars(top.map(c => ({ l: grNm(c.name), v: c.yl.pv, t: orgFmt(c.yl.pv) + ' PV' }))) : '<p class="muted">Nog geen bestellingen deze maand.</p>');
+}
+
+/* ---------- Commissie (schatting op basis van het Europese compensatieplan) ---------- */
+const COMM_RATES = [0.08, 0.05, 0.04, 0.04, 0.04], COMM_EUR = 1;
+function commEst(scen) {
+  const N = orgNodes(), d = new Date(), td = d.getDate(), x = new Date(d.getFullYear(), d.getMonth() - 2, 1), lim = x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-01';
+  const base = c => scen === 'now' ? (c.yl.pv || 0) : (c.yl.pv || 0) + (c.yl.au && !c.yl.aus && Number(c.yl.au) >= td ? (c.yl.aupv || 0) : 0);
+  const isFs = c => String(c.yl.since || '').slice(0, 10) >= lim && base(c) >= 50, vol = c => isFs(c) ? base(c) * 0.3 : base(c);
+  const per = [0, 0, 0, 0, 0]; let fs = 0, all = 0;
+  const walk = (n, level, carry) => {
+    const kids = N.kids.get(n.id) || [], v = vol(n); all += vol(n);
+    if (isFs(n)) { if (Number(n.yl.lvl) === 1) fs += base(n) * 0.25; else if (Number(n.yl.lvl) === 2) fs += base(n) * 0.10; }
+    if (base(n) >= 100) { if (level <= 5) per[level - 1] += v + carry; kids.forEach(k => walk(k, level + 1, 0)); }
+    else {
+      const best = kids.slice().sort((a, b) => base(b) - base(a))[0];
+      if (!kids.length) { if (level <= 5) per[level - 1] += v + carry; }
+      kids.forEach(k => walk(k, level, k === best ? v + carry : 0));
+    }
+  };
+  N.roots.forEach(r => walk(r, 1, 0));
+  const og = Math.round(all), depth = og >= 4000 ? 5 : og >= 2000 ? 4 : og >= 500 ? 3 : 2;
+  const uni = per.reduce((a, v, i) => a + (i < depth ? v * COMM_RATES[i] : 0), 0) * COMM_EUR;
+  return { per, uni: Math.round(uni * 100) / 100, fs: Math.round(fs * COMM_EUR * 100) / 100, gen: Math.round(all * 0.025 * COMM_EUR * 100) / 100, depth };
+}
+const eur = v => '€' + (Math.round(v * 100) / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function commHtml() {
+  const a = commEst('now'), b = commEst('exp'), ref = state.docs.commref, g = state.docs.mgoal, ogvExp = mgNow('pv') + mgProj().add;
+  const silverNow = ogvExp >= 10000;
+  const row = (l, x, y) => '<div class="mgrow"><span class="mgn">' + l + '</span><span class="small mgv">' + eur(x) + '</span><span class="small mgv" style="min-width:84px">' + eur(y) + '</span></div>';
+  return '<section class="card"><h2>Commissie (schatting)</h2>' +
+    '<div class="mgrow small muted"><span class="mgn"></span><span class="mgv">tot nu toe</span><span class="mgv" style="min-width:84px">verwacht</span></div>' +
+    row('Unilevel', a.uni, b.uni) + row('Fast Start', a.fs, b.fs) + '<div class="mgrow"><b class="mgn">Samen</b><b class="small mgv">' + eur(a.uni + a.fs) + '</b><b class="small mgv" style="min-width:84px">' + eur(b.uni + b.fs) + '</b></div>' +
+    (silverNow ? '<p class="small">Met Silver komt er persoonlijke generatie bij, ongeveer <b>' + eur(b.gen) + '</b>.</p>' : '<p class="small">Haal je <b>Silver</b>, dan komt er persoonlijke generatie bij (2,5% op je groepen), ongeveer <b>+' + eur(b.gen) + '</b> per maand bij dit volume.</p>') +
+    (ref ? '<p class="small muted">Ter vergelijking, ' + esc(new Date(ref.month + '-01').toLocaleDateString('nl-NL', { month: 'long' })) + ' echt: unilevel ' + eur(ref.uni) + ', Fast Start ' + eur(ref.fs) + ', leiderschapsbonus ' + eur(ref.glb) + ', samen ' + eur(ref.total) + '.</p>' : '') +
+    '<p class="small muted">Gebaseerd op het Europese plan: 8, 5 en 4% op vijf niveaus met compressie onder 100 PV, Fast Start 25% en 10% op de eerste drie maanden, en 1 PV als ongeveer €1. Het is een schatting en geen belofte van inkomen. De leiderschapsbonus, rangbonussen en afhoudingen zitten er niet in.</p></section>';
 }
 const ORG_FILTERS = { Klant: ['Actie nodig', 'Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'], Teamlid: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'] };
 function orgListHtml(kind) {
