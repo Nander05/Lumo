@@ -1459,19 +1459,30 @@ function orgAct(a, d) {
 /* live bestellingen uit het VO (komen binnen via de extensie en de vo-ingest functie) */
 const voOrders = () => Object.keys(state.docs).filter(i => i.startsWith('vobest-')).map(i => Object.assign({ id: i }, state.docs[i])).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
 function voWhen(at) { const d = (at || '').slice(0, 10), t = (at || '').slice(11, 16), td = todayKey(); return (d === td ? 'vandaag' : d ? d.slice(8, 10) + '/' + d.slice(5, 7) : '') + (t ? ' ' + t : ''); }
+const voLabel = e => ({ new: 'Nieuw lid', stop: 'Autoship gestopt', fail: 'Autoship niet verzonden', idle: 'Geen bestelling' })[e.t] || (e.first ? 'Eerste bestelling' : e.lr ? 'Loyalty Rewards' : 'Eenmalig');
 function voNotifyNew(l) {
   window.__voSeenN = window.__voSeenN || new Set();
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-  l.filter(e => !e.seen && !window.__voSeenN.has(e.id)).slice(0, 5).forEach(e => { window.__voSeenN.add(e.id); try { new Notification(e.name + ': bestelling', { body: orgFmt(e.pv || 0) + ' PV · ' + (e.first ? 'eerste bestelling' : e.lr ? 'Loyalty Rewards' : 'eenmalig'), tag: e.id }); } catch (x) {} });
+  l.filter(e => !e.seen && !window.__voSeenN.has(e.id)).slice(0, 5).forEach(e => { window.__voSeenN.add(e.id); try { new Notification(e.name + ': ' + voLabel(e).toLowerCase(), { body: (e.t && e.t !== 'order' ? (e.text || '') : orgFmt(e.pv || 0) + ' PV'), tag: e.id }); } catch (x) {} });
 }
 function voFeedHtml() {
   const l = voOrders(); if (!l.length) return '';
   voNotifyNew(l);
   const un = l.filter(e => !e.seen).length, perm = typeof Notification !== 'undefined' && Notification.permission === 'default';
   return '<section class="card" aria-labelledby="h-vo"><h2 id="h-vo">Bestellingen in je team' + (un ? ' ' + pill(un + ' nieuw', 'due') : '') + '</h2>' +
-    l.slice(0, 8).map(e => '<div class="row"><b>' + esc(e.name) + '</b>' + pill(orgFmt(e.pv || 0) + ' PV') + pill(e.first ? 'Eerste bestelling' : e.lr ? 'Loyalty Rewards' : 'Eenmalig', e.first ? 'due' : 'lr') + '<span class="spacer"></span><span class="small muted">' + esc(voWhen(e.at)) + '</span></div>').join('') +
+    l.slice(0, 8).map(e => '<div class="row"><b>' + esc(e.name) + '</b>' + (!e.t || e.t === 'order' ? pill(orgFmt(e.pv || 0) + ' PV') : '') + pill(voLabel(e), e.first || (e.t && e.t !== 'order') ? 'due' : 'lr') + '<span class="spacer"></span><span class="small muted">' + esc(voWhen(e.at)) + '</span>' + (e.cid && state.docs[e.cid] ? '<button class="btn ghost small" data-act="contact-edit" data-id="' + esc(e.cid) + '">Open</button>' : '') + '</div>' + (e.text ? '<div class="small muted">' + esc(e.text) + '</div>' : '')).join('') +
     '<div class="row">' + (un ? '<button class="btn ghost small" data-act="vo-seen">Alles gelezen</button>' : '') + (perm ? '<button class="btn ghost small" data-act="vo-notify">Meldingen aanzetten</button>' : '') + '</div></section>';
 }
+
+/* diepe links uit meldingen: ?open=<contact-id> opent die persoon, ?v=<tab> een tabblad */
+window.__deep = (function () { try { const p = new URLSearchParams(location.search), o = p.get('open'), v = p.get('v'); if (o || v) { history.replaceState(null, '', location.pathname); return { open: o, v: v }; } } catch (e) { /* geen URL-ondersteuning */ } return null; })();
+function deepGo(t) {
+  if (!t) return false;
+  if (t.open) { const c = state.docs[t.open]; if (!c) return false; state.view = 'mensen'; state.sub.mensen = c.kind === 'Teamlid' ? 'Teamleden' : 'Klanten'; state.dialog = { type: 'contact', id: t.open }; state.focusNext = false; render(); window.scrollTo(0, 0); return true; }
+  if (t.v) { state.view = t.v; state.dialog = null; render(); window.scrollTo(0, 0); return true; }
+  return false;
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { const m = e.data; if (m && m.lumoOpen) { try { const p = new URL(m.lumoOpen, location.href).searchParams, t = { open: p.get('open'), v: p.get('v') }; if (!state.ready || !deepGo(t)) window.__deep = t; } catch (x) { /* ongeldige link */ } } });
 
 /* ---------- web-versie: team, uitloggen en account (alleen in de eigen webapp) ---------- */
 window.__web = true;
@@ -1919,6 +1930,7 @@ document.addEventListener('focusout', () => { setTimeout(() => { if (state.pendi
     const docs = {}; list.forEach(d => { const id = d.id, c = Object.assign({}, d); delete c.id; docs[id] = c; });
     state.docs = pendApply(docs); state.ready = true;
     if (first) { first = false; render(); if (fellBack) toast('Opslag niet bereikbaar: lokale modus.'); } else softRender();
+    if (window.__deep && deepGo(window.__deep)) window.__deep = null;
   });
   SHARED.forEach(n => store.watchShared(n, list => {
     state.shared[n] = list.map(d => Object.assign({}, d));
