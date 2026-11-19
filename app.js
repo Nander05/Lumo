@@ -454,7 +454,7 @@ function viewCoach() {
   const sel = (id, label, opts) => '<label class="f" for="' + id + '">' + label + '<select id="' + id + '" data-change="' + id + '"><option value="">Kies…</option>' + opts + '</select></label>';
   const sug = typeof nuDoen === 'function' ? nuDoen().slice(0, 3) : [];
   const intro = '<div class="card soft"><h2>Wat zal ik voor je doen?</h2>' +
-    (sug.length ? '<div class="orgl">' + sug.map(x => '<button class="btn ghost" style="justify-content:flex-start;text-align:left" data-act="org-now" data-id="' + x.c.id + '"><span><b>' + esc(x.c.name) + '</b><br><span class="small muted">' + esc(x.why) + '</span></span></button>').join('') + '</div>' : '') +
+    (sug.length ? '<div class="orgl">' + sug.map(x => '<button class="btn ghost" style="justify-content:flex-start;text-align:left" data-act="org-now" data-id="' + x.c.id + '" data-k="' + x.k + '" data-why="' + esc(x.why) + '"><span><b>' + esc(x.c.name) + '</b><br><span class="small muted">' + esc(x.why) + '</span></span></button>').join('') + '</div>' : '') +
     '<div class="row">' + chips.map(x => '<button class="chip" data-act="coach-chip" data-prompt="' + esc(x[1]) + '">' + x[0] + '</button>').join('') + '</div></div>';
   const meer = c.more ? '<div class="card"><h2>Meer</h2><div class="grid2">' + sel('role', 'Rollenspel: oefen met…', roles.map((r, i) => '<option value="' + i + '">' + r[0] + '</option>').join('')) +
     sel('script', 'Script voor…', scripts.map((r, i) => '<option value="' + i + '">' + r[0] + '</option>').join('')) +
@@ -1450,12 +1450,21 @@ function mgHtml() {
     (open ? '<div class="mgdet"><p class="small">' + esc(pace) + '</p>' +
     (pj ? '<p class="small">Verwacht einde maand: <b>' + orgFmt(n + pj.add) + ' OGV</b> <span class="muted">(+' + orgFmt(pj.add) + ' uit ' + pj.n + ' geplande Loyalty Rewards' + (n + pj.add >= g.target ? ' · doel in zicht' : ' · nog ' + orgFmt(g.target - n - pj.add) + ' erbij nodig') + ')</span></p>' : '') + (rk ? mgRankHtml(rk, n + (pj ? pj.add : 0)) : '') + '</div>' : '') + '</section>';
 }
+function legPrompt(c) {
+  const g = state.docs.mgoal, rk = mgRank(g) || 'Silver', L = mgLegs(rk), x = L.top.find(t => t.c.id === c.id), R = L.R, td = new Date().getDate();
+  const N = orgNodes(), down = []; (function walk(n) { (N.kids.get(n.id) || []).forEach(k => { down.push(k); walk(k); }); })(c);
+  const act = down.filter(k => (k.yl.pv || 0) > 0).length, planned = down.filter(k => k.yl.au && !k.yl.aus && Number(k.yl.au) >= td), plannedPv = Math.round(planned.reduce((a, k) => a + (k.yl.aupv || 0), 0));
+  const failed = down.filter(k => orgNeeds(k) === 'LR niet verzonden').length, noLr = down.filter(k => !k.yl.au).length, dim = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+  const v = x ? x.v : Math.round(c.yl.ogv || 0);
+  return c.name + ' is een van de groepen die ik nodig heb voor ' + rk + '. De groep van ' + c.name + ' heeft ' + orgFmt(v) + ' van de ' + orgFmt(R.leg) + ' OGV die nodig is, dus er ontbreekt nog ' + orgFmt(Math.max(0, R.leg - v)) + ' OGV, en er zijn nog ' + (dim - td + 1) + ' dagen deze maand. Die groep telt ' + (down.length + 1) + ' mensen (de leider inbegrepen), ' + act + ' met bestelling deze maand, ' + planned.length + ' met nog geplande Loyalty Rewards (samen ongeveer ' + orgFmt(plannedPv) + ' PV), ' + failed + ' met een niet verzonden Loyalty Rewards, ' + noLr + ' zonder Loyalty Rewards. ' +
+    'Geef maximaal twee concrete acties voor mij: wat kan ik met deze persoon bespreken om die ontbrekende OGV te halen (met waarde of nieuwe info, geen losse check-in), en bij wie in deze groep zit het meeste kans. Schrijf daarna één kort bericht aan deze persoon dat ik kan sturen. Zeg erbij als je iets mist, en doe geen beloftes over resultaat.';
+}
 function nuDoen() {
   const t = todayKey(), seen = {}, out = [], lim = addDays(t, -7);
-  const add = (c, why, pr) => { if (!c || seen[c.id]) return; seen[c.id] = 1; out.push({ c, why, pr }); };
+  const add = (c, why, pr, k) => { if (!c || seen[c.id]) return; seen[c.id] = 1; out.push({ c, why, pr, k: k || '' }); };
   const needs = allContacts().filter(c => c.yl).map(c => ({ c, n: orgNeeds(c) })).filter(x => x.n);
   needs.filter(x => x.n === 'LR niet verzonden').forEach(x => add(x.c, x.n, 0));
-  { const g = state.docs.mgoal, rk = mgRank(g); if (rk) { const L = mgLegs(rk); L.top.forEach((x, i) => { if (x.v < L.R.leg) add(x.c, 'Groep ' + (i + 1) + ' mist nog ' + orgFmt(L.R.leg - x.v) + ' OGV voor ' + rk, 0.5); }); } }
+  { const g = state.docs.mgoal, rk = mgRank(g); if (rk) { const L = mgLegs(rk); L.top.forEach((x, i) => { if (x.v < L.R.leg) add(x.c, 'Groep ' + (i + 1) + ' mist nog ' + orgFmt(L.R.leg - x.v) + ' OGV voor ' + rk, 0.5, 'leg'); }); } }
   voOrders().filter(e => (e.t === 'new' || e.t === 'conv' || e.t === 'stop') && String(e.at || '').slice(0, 10) >= lim && state.docs[e.cid]).forEach(e => add(Object.assign({ id: e.cid }, state.docs[e.cid]), voLabel(e), 1));
   dueContacts().forEach(c => add(c, 'Opvolging gepland', 2));
   needs.filter(x => x.n.indexOf('Bestelmoment') === 0).forEach(x => add(x.c, x.n, 3));
@@ -1583,7 +1592,13 @@ function orgAct(a, d) {
   if (a === 'org-more') { state.orgmore = true; render(); return true; }
   if (a === 'org-net') { state.netOpen = Object.assign({}, state.netOpen || {}); if (state.netOpen[d.id]) delete state.netOpen[d.id]; else state.netOpen[d.id] = true; render(); return true; }
   if (a === 'org-netf') { state.netf = d.f; render(); return true; }
-  if (a === 'org-now') { const c = state.docs[d.id]; if (!c) return true; state.view = 'coach'; state.dialog = null; render(); window.scrollTo(0, 0); coachSend(c.name + ': wat is nu het slimste om te doen voor deze persoon? Wat ik weet: ' + deepFacts(c) + '. Geef maximaal twee concrete acties, elk met een reden die nieuwe info of waarde bevat (geen losse check-in), en \u00e9\u00e9n kort bericht dat ik kan sturen met iets nuttigs erin. Zeg erbij als je iets mist.'); return true; }
+  if (a === 'org-now') {
+    const c = state.docs[d.id]; if (!c) return true; state.view = 'coach'; state.dialog = null; render(); window.scrollTo(0, 0);
+    let q;
+    if (d.k === 'leg') q = legPrompt(Object.assign({ id: d.id }, c));
+    else q = c.name + ': wat is nu het slimste om te doen voor deze persoon?' + (d.why ? ' Waarom ze nu opkomt: ' + d.why + '.' : '') + ' Wat ik weet: ' + deepFacts(c) + '. Geef maximaal twee concrete acties, elk met een reden die nieuwe info of waarde bevat (geen losse check-in), en één kort bericht dat ik kan sturen met iets nuttigs erin. Zeg erbij als je iets mist.';
+    coachSend(q); return true;
+  }
   if (a === 'org-net-all') { const o = {}; if (d.o === '1') orgNodes().kids.forEach((v, k) => { o[k] = true; }); state.netOpen = o; render(); return true; }
   return false;
 }
