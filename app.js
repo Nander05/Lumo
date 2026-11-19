@@ -1389,6 +1389,7 @@ function orgPrio(c) {
 }
 
 /* ---------- Vandaag: maanddoel en Nu doen ---------- */
+try { state.mgOpen = localStorage.getItem('lumo-mgopen') === '1'; } catch (e) {}
 const MG_METRICS = { pv: 'OGV', rankSilver: 'Rang Silver', rankGold: 'Rang Gold', new: 'Nieuwe leden', act: 'Leden met bestelling' };
 const RANKS = { Silver: { ogv: 10000, legs: 2, leg: 4000, pgv: 1000 }, Gold: { ogv: 35000, legs: 3, leg: 6000, pgv: 1000 } };
 const mgRank = g => g && g.metric.indexOf('rank') === 0 ? g.metric.slice(4) : '';
@@ -1409,9 +1410,13 @@ function mgProj() {
   allContacts().forEach(c => { const y = c.yl; if (y && y.au && !y.aus && Number(y.au) >= d && y.aupv) { add += y.aupv; n++; } });
   return { add: Math.round(add), n };
 }
+function mgRankShort(rk) {
+  const L = mgLegs(rk), miss = L.top.filter(x => x.v < L.R.leg).length + (L.top.length < L.R.legs ? L.R.legs - L.top.length : 0);
+  return miss ? miss + (miss === 1 ? ' groep' : ' groepen') + ' nog niet klaar' : 'groepen ok';
+}
 function mgRankHtml(rk, proj) {
   const L = mgLegs(rk), R = L.R, ok = x => '<span class="pill' + (x ? '' : ' due') + '">' + (x ? 'ok' : 'nog niet') + '</span>';
-  const row = (t, a, b, good) => '<div class="row" style="justify-content:space-between"><span>' + esc(t) + '</span><span class="small">' + a + (b ? ' / ' + b : '') + ' ' + ok(good) + '</span></div>';
+  const row = (t, a, b, good) => '<div class="mgrow"><span class="mgn">' + esc(t) + '</span><span class="small mgv">' + a + (b ? ' / ' + b : '') + ' ' + ok(good) + '</span></div>';
   return '<div class="mgrank"><p class="eyebrow" style="margin:10px 0 4px">Wat Silver vraagt</p>'.replace('Silver', rk) +
     L.top.map((x, i) => row('Groep ' + (i + 1) + ': ' + x.c.name.replace(/\b\w/g, m => m.toUpperCase()).toLowerCase().replace(/(^|\s)\S/g, m => m.toUpperCase()), orgFmt(x.v), orgFmt(R.leg), x.v >= R.leg)).join('') +
     (L.top.length < R.legs ? '<p class="small muted">Je hebt nog maar ' + L.top.length + ' groep' + (L.top.length === 1 ? '' : 'en') + ' met volume.</p>' : '') +
@@ -1428,13 +1433,15 @@ function mgHtml() {
       '<div class="row"><button class="btn" data-act="org-mg-save">Opslaan</button>' + (g ? '<button class="btn ghost" data-act="org-mg-cancel">Annuleer</button>' : '') + '</div>' +
       '<p class="small muted">De voortgang wordt automatisch uit je Virtual Office berekend en elke maand opnieuw geteld.</p></section>';
   }
-  const og = mgOgvMetric(g), rk = mgRank(g), n = mgNow(g.metric), pj = og ? mgProj() : null, pp = pj ? Math.min(100, Math.round((n + pj.add) / g.target * 100)) : 0, pct = Math.min(100, Math.round(n / g.target * 100)), need = Math.max(0, g.target - n), per = og ? Math.ceil(need / left) : Math.max(0, need / left);
+  const open = !!state.mgOpen, og = mgOgvMetric(g), rk = mgRank(g), n = mgNow(g.metric), pj = og ? mgProj() : null, pp = pj ? Math.min(100, Math.round((n + pj.add) / g.target * 100)) : 0, pct = Math.min(100, Math.round(n / g.target * 100)), need = Math.max(0, g.target - n), per = og ? Math.ceil(need / left) : Math.max(0, need / left);
   const pace = need <= 0 ? 'Doel gehaald' : 'nog ' + orgFmt(need) + (og ? ' OGV' : '') + ' · ' + left + (left === 1 ? ' dag' : ' dagen') + (og ? ' · ±' + orgFmt(per) + ' per dag' : '');
   return '<section class="card mg"><div class="row"><p class="eyebrow" style="margin:0">' + esc(mname) + ' · ' + esc(MG_METRICS[g.metric]) + '</p><span class="spacer"></span><button class="btn ghost small" data-act="org-mg-edit">Wijzig</button></div>' +
     '<div class="big">' + orgFmt(n) + ' <span class="small muted">/ ' + orgFmt(g.target) + '</span></div>' +
     '<div class="bar' + (n >= g.target ? ' full' : '') + '" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100" style="position:relative">' + (pj && pj.add ? '<i style="position:absolute;left:0;top:0;height:100%;width:' + pp + '%;opacity:.3"></i>' : '') + '<i style="position:relative;width:' + pct + '%"></i></div>' +
-    '<p class="small">' + pct + '% · ' + esc(pace) + '</p>' +
-    (pj ? '<p class="small">Verwacht einde maand: <b>' + orgFmt(n + pj.add) + ' OGV</b> <span class="muted">(+' + orgFmt(pj.add) + ' uit ' + pj.n + ' geplande Loyalty Rewards' + (n + pj.add >= g.target ? ' · doel in zicht' : ' · nog ' + orgFmt(g.target - n - pj.add) + ' erbij nodig') + ')</span></p>' : '') + (rk ? mgRankHtml(rk, n + (pj ? pj.add : 0)) : '') + '</section>';
+    '<p class="small">' + pct + '% · ' + (pj ? 'verwacht <b>' + orgFmt(n + pj.add) + '</b>' : esc(pace)) + (rk ? ' · ' + mgRankShort(rk) : '') + '</p>' +
+    '<button class="btn ghost small" data-act="org-mg-open" aria-expanded="' + open + '">' + (open ? 'Minder tonen' : 'Details') + '</button>' +
+    (open ? '<div class="mgdet"><p class="small">' + esc(pace) + '</p>' +
+    (pj ? '<p class="small">Verwacht einde maand: <b>' + orgFmt(n + pj.add) + ' OGV</b> <span class="muted">(+' + orgFmt(pj.add) + ' uit ' + pj.n + ' geplande Loyalty Rewards' + (n + pj.add >= g.target ? ' · doel in zicht' : ' · nog ' + orgFmt(g.target - n - pj.add) + ' erbij nodig') + ')</span></p>' : '') + (rk ? mgRankHtml(rk, n + (pj ? pj.add : 0)) : '') + '</div>' : '') + '</section>';
 }
 function nuDoen() {
   const t = todayKey(), seen = {}, out = [], lim = addDays(t, -7);
@@ -1532,6 +1539,7 @@ function orgYlHtml(c, cid) {
 function orgAct(a, d) {
   if (a === 'org-kind') { const c0 = state.docs[d.id]; if (!c0) return true; save(d.id, Object.assign({}, c0, { kind: d.k, kindSet: true, updatedAt: new Date().toISOString() })); render(); toast(d.k === 'Teamlid' ? (c0.name + ' is nu teamlid.') : (c0.name + ' staat weer bij de klanten.')); return true; }
   if (a === 'org-filter') { state.orgf = d.f; state.orgmore = false; render(); return true; }
+  if (a === 'org-mg-open') { state.mgOpen = !state.mgOpen; try { localStorage.setItem('lumo-mgopen', state.mgOpen ? '1' : ''); } catch (e) {} render(); return true; }
   if (a === 'org-mg-edit') { state.mgEdit = true; render(); return true; }
   if (a === 'org-mg-cancel') { state.mgEdit = false; render(); return true; }
   if (a === 'org-mg-save') { const m = (document.getElementById('mg-m') || {}).value, v = parseInt((document.getElementById('mg-t') || {}).value, 10); if (!m || (!(v > 0) && m.indexOf('rank') !== 0)) { toast('Vul een doel in.'); return true; } save('mgoal', { metric: m, target: v > 0 ? v : RANKS[m.slice(4)].ogv, updatedAt: new Date().toISOString() }); state.mgEdit = false; render(); return true; }
