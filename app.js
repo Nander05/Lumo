@@ -440,7 +440,7 @@ function viewMensen() {
         '<span class="spacer"></span><button class="btn ghost small" data-act="event-edit" data-id="' + w.id + '">Bewerk</button></div></section>';
     }).join('') || '<div class="card soft"><p>Nog geen workshops. Plan er een en nodig je gasten uit.</p></div>');
   }
-  return '<div class="row"><h1>Mensen</h1><span class="spacer"></span><button class="btn" data-act="contact-new">Nieuw contact</button></div>' + subTabs('mensen') + body + '<p class="small muted" style="margin-top:18px">Alleen jij ziet deze lijsten. Bewaar alleen wat je nodig hebt: het zijn gegevens van anderen.</p>';
+  return '<div class="row"><h1>Mensen</h1><span class="spacer"></span><button class="btn small" data-act="contact-new">+ Nieuw</button></div>' + subTabs('mensen') + body + '<p class="small muted" style="margin-top:18px">Alleen jij ziet deze lijsten. Bewaar alleen wat je nodig hebt: het zijn gegevens van anderen.</p>';
 }
 
 /* ---------- Coach ---------- */
@@ -1472,14 +1472,13 @@ function orgListHtml(kind) {
   if (f === 'Actie nodig' && s === 'Naam') hit.sort((a, b) => orgPrio(a) - orgPrio(b) || (b.yl.mwo || 0) - (a.yl.mwo || 0) || a.name.localeCompare(b.name)); else hit.sort(s === 'Laatst besteld (oudste eerst)' ? (a, b) => mw(b) - mw(a) || a.name.localeCompare(b.name) : s === 'PV (hoog naar laag)' ? (a, b) => pv(b) - pv(a) : s === 'OGV (hoog naar laag)' ? (a, b) => og(b) - og(a) : (a, b) => (a.name || '').localeCompare(b.name || ''));
   const lr = all.filter(c => c.yl && c.yl.au).length, cap = (f === 'Actie nodig' && !q && !state.orgmore) ? 10 : 40;
   if (!all.length) return '<p class="muted">' + (kind === 'Klant' ? 'Nog geen klanten. Importeer je organisatie uit het Virtual Office, of voeg een contact toe.' : 'Nog geen teamleden. Open Klanten en tik bij iemand op Maak teamlid zodra die een actief business kiest.') + '</p>';
-  return '<p class="small muted">' + hit.length + ' van ' + all.length + (kind === 'Klant' ? ' klanten · ' + lr + ' met Loyalty Rewards · ' + (all.length - lr) + ' zonder' : ' teamleden · ' + lr + ' met Loyalty Rewards') + (hit.length > cap && cap === 40 ? '. Zoek of filter om de rest te zien.' : '') + '</p><div class="orgl">' + hit.slice(0, cap).map(c => c.yl ? orgCard(c) : contactCard(c)).join('') + '</div>' + (hit.length > cap && cap === 10 ? '<button class="btn" data-act="org-more">Toon alle ' + hit.length + '</button>' : '');
+  return '<p class="small muted">' + hit.length + ' van ' + all.length + (kind === 'Klant' ? ' klanten' : ' teamleden') + (hit.length > cap && cap === 40 ? ' · zoek of filter voor de rest' : '') + '</p><div class="orgl">' + hit.slice(0, cap).map(c => c.yl ? orgCard(c) : contactCard(c)).join('') + '</div>' + (hit.length > cap && cap === 10 ? '<button class="btn" data-act="org-more">Toon alle ' + hit.length + '</button>' : '');
 }
 function orgPageHtml(kind) {
   state.orgkind = kind; const all = byKind(kind), f = state.orgf || 'Actie nodig';
   const sorts = kind === 'Klant' ? ['Naam', 'Laatst besteld (oudste eerst)', 'PV (hoog naar laag)'] : ['Naam', 'Laatst besteld (oudste eerst)', 'PV (hoog naar laag)', 'OGV (hoog naar laag)'];
-  return (all.some(c => c.yl) ? '<div class="seg" role="group" aria-label="Filter">' + ORG_FILTERS[kind].map(x => '<button class="chip" data-act="org-filter" data-f="' + x + '" aria-pressed="' + (f === x) + '">' + x + '</button>').join('') + '</div>' +
-      '<div class="row"><label class="f" style="flex:1"><span class="sr">Zoek op naam</span><input type="search" data-input="orgsearch" placeholder="Zoek op naam, gsm of plaats…" value="' + esc(state.orgq || '') + '"></label>' +
-      '<label class="f"><span class="sr">Sorteren</span><select data-change="org-sort">' + sorts.map(x => '<option' + (x === (state.orgsort || 'Naam') ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></label></div>' : '') +
+  return (all.some(c => c.yl) ? '<label class="f"><span class="sr">Zoek op naam</span><input type="search" data-input="orgsearch" placeholder="Zoek op naam, gsm of plaats…" value="' + esc(state.orgq || '') + '"></label>' +
+      '<div class="seg" role="group" aria-label="Filter">' + ORG_FILTERS[kind].map(x => '<button class="chip" data-act="org-filter" data-f="' + x + '" aria-pressed="' + (f === x) + '">' + x + '</button>').join('') + '</div>' : '') +
     '<div id="orglist">' + orgListHtml(kind) + '</div>';
 }
 /* ---------- netwerk (zoals de organisatieweergave in het Virtual Office) ---------- */
@@ -1522,7 +1521,8 @@ function orgNetListHtml() {
 function orgNetHtml() {
   const g = orgNodes(); if (!g.nodes.length) return '<div class="card soft"><p>Nog geen netwerk. Importeer je organisatie uit het Virtual Office (Rapport uit Gmail of CSV). Het rapport moet de kolom Level bevatten.</p><div class="row"><button class="btn" data-act="org-import">Organisatie importeren</button></div></div>';
   const lr = g.nodes.filter(n => n.yl.au).length, team = g.nodes.filter(n => n.kind === 'Teamlid').length, pv = g.nodes.reduce((a, n) => a + (n.yl.pv || 0), 0), l1 = g.roots.length;
-  return '<div class="card soft"><div class="row" style="gap:14px;flex-wrap:wrap"><span><b>' + g.nodes.length + '</b><br><span class="small muted">mensen</span></span><span><b>' + (g.ordered ? l1 : g.nodes.filter(n => n.yl.lvl === 1).length) + '</b><br><span class="small muted">niveau 1</span></span><span><b>' + team + '</b><br><span class="small muted">teamleden</span></span><span><b>' + lr + '</b><br><span class="small muted">met LR</span></span><span><b>' + orgFmt(pv) + '</b><br><span class="small muted">PV totaal</span></span></div></div>' +
+  const stat = (v, l) => '<div class="ost"><b>' + v + '</b><span class="small muted">' + l + '</span></div>';
+  return '<div class="card soft ostats">' + stat(g.nodes.length, 'mensen') + stat(team, 'teamleden') + stat(lr, 'met LR') + stat(allContacts().filter(c => c.yl && orgNeeds(c)).length, 'aandacht') + '</div>' +
     '<div class="seg" role="group" aria-label="Weergave">' + ['Boom', 'Actie nodig', 'Team', 'Nieuw', 'Loyalty Rewards'].map(x => '<button class="chip" data-act="org-netf" data-f="' + x + '" aria-pressed="' + ((state.netf || 'Boom') === x) + '">' + x + '</button>').join('') + '</div>' +
     '<div class="row"><label class="f" style="flex:1"><span class="sr">Zoek in je netwerk</span><input type="search" data-input="netsearch" placeholder="Zoek op naam…" value="' + esc(state.netq || '') + '"></label>' + ((state.netf || 'Boom') === 'Boom' ? '<button class="btn ghost small" data-act="org-net-all" data-o="1">Alles open</button><button class="btn ghost small" data-act="org-net-all" data-o="0">Dicht</button>' : '') + '</div>' +
     '<div id="netlist" class="net">' + orgNetListHtml() + '</div>';
