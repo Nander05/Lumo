@@ -1380,12 +1380,16 @@ function orgNeeds(c) {
   return '';
 }
 function orgCard(c) {
-  const y = c.yl || {}, a = orgAvg(c), need = orgNeeds(c);
-  const l1 = [y.mwo != null ? 'Laatst besteld: <b>' + orgAgo(y.mwo) + '</b>' : '', 'PV <b>' + orgFmt(y.pv || 0) + '</b>', a ? 'Gem. PV <b>' + orgFmt(a.avg) + '</b> (' + a.n + ' mnd)' : ''].filter(Boolean).join(' \u00b7 ');
-  const l2 = c.kind === 'Teamlid' ? '<p class="small">OGV <b>' + orgFmt(y.ogv || 0) + '</b> \u00b7 PGV <b>' + orgFmt(y.pgv || 0) + '</b></p>' : '';
-  return '<div class="contact org"><div class="row"><button class="net-name" data-act="contact-edit" data-id="' + c.id + '">' + esc(c.name) + '</button><span class="spacer"></span>' + (need ? pill(need, 'due') : '') + '</div><div class="row" style="gap:6px;flex-wrap:wrap">' + orgBadges(c) + '</div>' +
-    '<p class="small">' + l1 + '</p>' + l2 + (y.phone ? '<p class="small"><a href="tel:' + esc(String(y.phone).replace(/[^\d+]/g, '')) + '">' + esc(y.phone) + '</a>' + (y.city ? ' \u00b7 ' + esc(y.city) : '') + '</p>' : '') +
-    '<div class="row"><button class="btn small" data-act="org-now" data-id="' + c.id + '">Wat nu?</button></div></div>';
+  const y = c.yl || {}, need = orgNeeds(c);
+  const why = need || (y.au ? 'Loyalty Rewards actief' : (c.kind === 'Teamlid' ? 'Teamlid' : 'Geen Loyalty Rewards'));
+  return '<div class="orgc"><button class="orgc-main" data-act="contact-edit" data-id="' + c.id + '"><b>' + esc(c.name) + '</b><span class="orgc-why' + (need ? ' due' : '') + '">' + esc(why) + '</span></button>' +
+    '<button class="btn small" data-act="org-now" data-id="' + c.id + '">Wat nu?</button></div>';
+}
+function orgPrio(c) {
+  const y = c.yl || {}, n = orgNeeds(c);
+  if (n === 'LR niet verzonden') return 0;
+  if (n.indexOf('Bestelmoment') === 0) return 1;
+  return n ? 2 : 3;
 }
 const ORG_FILTERS = { Klant: ['Actie nodig', 'Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'], Teamlid: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'] };
 function orgListHtml(kind) {
@@ -1394,10 +1398,10 @@ function orgListHtml(kind) {
   let hit = all.filter(c => !q || normName(c.name + ' ' + (c.yl ? c.yl.phone || '' : '') + ' ' + (c.info || []).map(x => x.v).join(' ')).includes(q));
   hit = hit.filter(c => f === 'Alles' || (f === 'Actie nodig' && orgNeeds(c)) || (f === 'Loyalty Rewards' && c.yl && c.yl.au) || (f === 'Geen LR' && !(c.yl && c.yl.au)) || (f === 'Lang niet besteld' && c.yl && c.yl.mwo != null && c.yl.mwo >= 3));
   const mw = c => c.yl && c.yl.mwo != null ? c.yl.mwo : -1, pv = c => c.yl ? c.yl.pv || 0 : 0, og = c => c.yl ? c.yl.ogv || 0 : 0;
-  hit.sort(s === 'Laatst besteld (oudste eerst)' ? (a, b) => mw(b) - mw(a) || a.name.localeCompare(b.name) : s === 'PV (hoog naar laag)' ? (a, b) => pv(b) - pv(a) : s === 'OGV (hoog naar laag)' ? (a, b) => og(b) - og(a) : (a, b) => (a.name || '').localeCompare(b.name || ''));
-  const lr = all.filter(c => c.yl && c.yl.au).length, cap = 40;
+  if (f === 'Actie nodig' && s === 'Naam') hit.sort((a, b) => orgPrio(a) - orgPrio(b) || (b.yl.mwo || 0) - (a.yl.mwo || 0) || a.name.localeCompare(b.name)); else hit.sort(s === 'Laatst besteld (oudste eerst)' ? (a, b) => mw(b) - mw(a) || a.name.localeCompare(b.name) : s === 'PV (hoog naar laag)' ? (a, b) => pv(b) - pv(a) : s === 'OGV (hoog naar laag)' ? (a, b) => og(b) - og(a) : (a, b) => (a.name || '').localeCompare(b.name || ''));
+  const lr = all.filter(c => c.yl && c.yl.au).length, cap = (f === 'Actie nodig' && !q && !state.orgmore) ? 10 : 40;
   if (!all.length) return '<p class="muted">' + (kind === 'Klant' ? 'Nog geen klanten. Importeer je organisatie uit het Virtual Office, of voeg een contact toe.' : 'Nog geen teamleden. Open Klanten en tik bij iemand op Maak teamlid zodra die een actief business kiest.') + '</p>';
-  return '<p class="small muted">' + hit.length + ' van ' + all.length + (kind === 'Klant' ? ' klanten · ' + lr + ' met Loyalty Rewards · ' + (all.length - lr) + ' zonder' : ' teamleden · ' + lr + ' met Loyalty Rewards') + (hit.length > cap ? '. Zoek of filter om de rest te zien.' : '') + '</p><div class="board">' + hit.slice(0, cap).map(c => c.yl ? orgCard(c) : contactCard(c)).join('') + '</div>';
+  return '<p class="small muted">' + hit.length + ' van ' + all.length + (kind === 'Klant' ? ' klanten · ' + lr + ' met Loyalty Rewards · ' + (all.length - lr) + ' zonder' : ' teamleden · ' + lr + ' met Loyalty Rewards') + (hit.length > cap && cap === 40 ? '. Zoek of filter om de rest te zien.' : '') + '</p><div class="orgl">' + hit.slice(0, cap).map(c => c.yl ? orgCard(c) : contactCard(c)).join('') + '</div>' + (hit.length > cap && cap === 10 ? '<button class="btn" data-act="org-more">Toon alle ' + hit.length + '</button>' : '');
 }
 function orgPageHtml(kind) {
   state.orgkind = kind; const all = byKind(kind), f = state.orgf || 'Actie nodig';
@@ -1463,7 +1467,8 @@ function orgYlHtml(c, cid) {
 }
 function orgAct(a, d) {
   if (a === 'org-kind') { const c0 = state.docs[d.id]; if (!c0) return true; save(d.id, Object.assign({}, c0, { kind: d.k, kindSet: true, updatedAt: new Date().toISOString() })); render(); toast(d.k === 'Teamlid' ? (c0.name + ' is nu teamlid.') : (c0.name + ' staat weer bij de klanten.')); return true; }
-  if (a === 'org-filter') { state.orgf = d.f; render(); return true; }
+  if (a === 'org-filter') { state.orgf = d.f; state.orgmore = false; render(); return true; }
+  if (a === 'org-more') { state.orgmore = true; render(); return true; }
   if (a === 'org-net') { state.netOpen = Object.assign({}, state.netOpen || {}); if (state.netOpen[d.id]) delete state.netOpen[d.id]; else state.netOpen[d.id] = true; render(); return true; }
   if (a === 'org-netf') { state.netf = d.f; render(); return true; }
   if (a === 'org-now') { const c = state.docs[d.id]; if (!c) return true; state.view = 'coach'; state.dialog = null; render(); window.scrollTo(0, 0); coachSend(c.name + ': wat is nu het slimste om te doen voor deze persoon? Wat ik weet: ' + deepFacts(c) + '. Geef maximaal twee concrete acties, elk met een reden die nieuwe info of waarde bevat (geen losse check-in), en \u00e9\u00e9n kort bericht dat ik kan sturen met iets nuttigs erin. Zeg erbij als je iets mist.'); return true; }
