@@ -1389,12 +1389,17 @@ function orgPrio(c) {
 }
 
 /* ---------- Vandaag: maanddoel en Nu doen ---------- */
-const MG_METRICS = { pv: 'Team-PV', new: 'Nieuwe leden', act: 'Leden met bestelling' };
+const MG_METRICS = { pv: 'OGV', new: 'Nieuwe leden', act: 'Leden met bestelling' };
 function mgNow(m) {
   const mk = todayKey().slice(0, 7), cs = allContacts().filter(c => c.yl);
   if (m === 'pv') return Math.round(cs.reduce((s, c) => s + (c.yl.pv || 0), 0));
   if (m === 'new') return cs.filter(c => String(c.yl.since || '').slice(0, 7) === mk).length;
   return cs.filter(c => String(c.yl.last || '').slice(0, 7) === mk).length;
+}
+function mgProj() {
+  const d = new Date().getDate(); let add = 0, n = 0;
+  allContacts().forEach(c => { const y = c.yl; if (y && y.au && !y.aus && Number(y.au) >= d && y.aupv) { add += y.aupv; n++; } });
+  return { add: Math.round(add), n };
 }
 function mgHtml() {
   const g = state.docs.mgoal, t = todayKey(), dt = new Date(), dim = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate(), left = dim - dt.getDate() + 1;
@@ -1406,12 +1411,13 @@ function mgHtml() {
       '<div class="row"><button class="btn" data-act="org-mg-save">Opslaan</button>' + (g ? '<button class="btn ghost" data-act="org-mg-cancel">Annuleer</button>' : '') + '</div>' +
       '<p class="small muted">De voortgang wordt automatisch uit je Virtual Office berekend en elke maand opnieuw geteld.</p></section>';
   }
-  const n = mgNow(g.metric), pct = Math.min(100, Math.round(n / g.target * 100)), need = Math.max(0, g.target - n), per = g.metric === 'pv' ? Math.ceil(need / left) : Math.max(0, need / left);
-  const pace = need <= 0 ? 'Doel gehaald' : 'nog ' + orgFmt(need) + (g.metric === 'pv' ? ' PV' : '') + ' · ' + left + (left === 1 ? ' dag' : ' dagen') + (g.metric === 'pv' ? ' · ±' + orgFmt(per) + ' per dag' : '');
+  const n = mgNow(g.metric), pj = g.metric === 'pv' ? mgProj() : null, pp = pj ? Math.min(100, Math.round((n + pj.add) / g.target * 100)) : 0, pct = Math.min(100, Math.round(n / g.target * 100)), need = Math.max(0, g.target - n), per = g.metric === 'pv' ? Math.ceil(need / left) : Math.max(0, need / left);
+  const pace = need <= 0 ? 'Doel gehaald' : 'nog ' + orgFmt(need) + (g.metric === 'pv' ? ' OGV' : '') + ' · ' + left + (left === 1 ? ' dag' : ' dagen') + (g.metric === 'pv' ? ' · ±' + orgFmt(per) + ' per dag' : '');
   return '<section class="card mg"><div class="row"><p class="eyebrow" style="margin:0">' + esc(mname) + ' · ' + esc(MG_METRICS[g.metric]) + '</p><span class="spacer"></span><button class="btn ghost small" data-act="org-mg-edit">Wijzig</button></div>' +
     '<div class="big">' + orgFmt(n) + ' <span class="small muted">/ ' + orgFmt(g.target) + '</span></div>' +
-    '<div class="bar' + (n >= g.target ? ' full' : '') + '" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100"><i style="width:' + pct + '%"></i></div>' +
-    '<p class="small">' + pct + '% · ' + esc(pace) + '</p></section>';
+    '<div class="bar' + (n >= g.target ? ' full' : '') + '" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100" style="position:relative">' + (pj && pj.add ? '<i style="position:absolute;left:0;top:0;height:100%;width:' + pp + '%;opacity:.3"></i>' : '') + '<i style="position:relative;width:' + pct + '%"></i></div>' +
+    '<p class="small">' + pct + '% · ' + esc(pace) + '</p>' +
+    (pj ? '<p class="small">Verwacht einde maand: <b>' + orgFmt(n + pj.add) + ' OGV</b> <span class="muted">(+' + orgFmt(pj.add) + ' uit ' + pj.n + ' geplande Loyalty Rewards' + (n + pj.add >= g.target ? ' · doel in zicht' : ' · nog ' + orgFmt(g.target - n - pj.add) + ' erbij nodig') + ')</span></p>' : '') + '</section>';
 }
 function nuDoen() {
   const t = todayKey(), seen = {}, out = [], lim = addDays(t, -7);
