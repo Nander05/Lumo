@@ -59,7 +59,7 @@ const libAll = () => sh('library').concat(sh('glibrary').map(i => Object.assign(
 const LEADER_ONLY = ['shares', 'help', 'campshares'];
 const SUBS = {
   mensen: ['Prospects', 'Klanten', 'Organisatie', 'Workshops'],
-  groei: ['Content', 'Controle', 'Cijfers'],
+  groei: ['Content', 'Cijfers'],
   team: ['Bibliotheek', 'Campagnes', 'Training', 'Draaiboek', 'Agenda', 'Uitdaging', 'Mentor', 'Erkenning', 'Hulp', 'Overzicht']
 };
 const SVG = p => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
@@ -452,18 +452,32 @@ function viewCoach() {
   const roles = [['Iemand die twijfelt', 'iemand die twijfelt of het iets voor haar is'], ['Een kritische vriend', 'een vriend die sceptisch is over netwerkmarketing'], ['Iemand zonder tijd', 'iemand die zegt dat ze geen tijd heeft']];
   const scripts = [['Eerste uitnodiging', 'een eerste uitnodiging voor een kennismakingsgesprek'], ['Opvolging na workshop', 'een opvolging na een workshop met iets nuttigs voor elke gast (materiaal, antwoord op een vraag) en een voorstel voor een nieuw moment'], ['Herbestelling', 'een bericht aan een klant rond een nieuw bestelmoment, met iets nuttigs erin (tip, info over haar product) in plaats van een losse herinnering'], ['Welkom nieuw teamlid', 'een welkomstbericht voor een nieuw teamlid'], ['Iemand zegt nee', 'een reactie als iemand nee zegt, zodat de deur open blijft']];
   const sel = (id, label, opts) => '<label class="f" for="' + id + '">' + label + '<select id="' + id + '" data-change="' + id + '"><option value="">Kies…</option>' + opts + '</select></label>';
-  const intro = '<div class="card soft"><h2>Jouw coach</h2><p>Stel een vraag of kies een snelle start. De coach kent je doelen, mensen, cijfers en de bibliotheek, en niets van anderen.</p>' +
-    '<div class="row">' + chips.map(x => '<button class="chip" data-act="coach-chip" data-prompt="' + esc(x[1]) + '">' + x[0] + '</button>').join('') + '</div>' +
-    '<div class="grid2">' + sel('role', 'Rollenspel: oefen met…', roles.map((r, i) => '<option value="' + i + '">' + r[0] + '</option>').join('')) +
+  const sug = typeof nuDoen === 'function' ? nuDoen().slice(0, 3) : [];
+  const intro = '<div class="card soft"><h2>Wat zal ik voor je doen?</h2>' +
+    (sug.length ? '<div class="orgl">' + sug.map(x => '<button class="btn ghost" style="justify-content:flex-start;text-align:left" data-act="org-now" data-id="' + x.c.id + '"><span><b>' + esc(x.c.name) + '</b><br><span class="small muted">' + esc(x.why) + '</span></span></button>').join('') + '</div>' : '') +
+    '<div class="row">' + chips.map(x => '<button class="chip" data-act="coach-chip" data-prompt="' + esc(x[1]) + '">' + x[0] + '</button>').join('') + '</div></div>';
+  const meer = c.more ? '<div class="card"><h2>Meer</h2><div class="grid2">' + sel('role', 'Rollenspel: oefen met…', roles.map((r, i) => '<option value="' + i + '">' + r[0] + '</option>').join('')) +
     sel('script', 'Script voor…', scripts.map((r, i) => '<option value="' + i + '">' + r[0] + '</option>').join('')) +
-    (cl.length ? sel('follow', 'Bericht voor…', cl.map(x => '<option value="' + x.id + '">' + esc(x.name) + ' (' + esc(x.kind || 'Prospect') + ')</option>').join('')) : '') + '</div></div>';
+    (cl.length ? sel('follow', 'Bericht voor…', cl.map(x => '<option value="' + x.id + '">' + esc(x.name) + ' (' + esc(x.kind || 'Prospect') + ')</option>').join('')) : '') + '</div></div>' +
+    '<div class="card">' + checkBodyHtml() + '</div>' : '';
   window.__roles = roles; window.__scripts = scripts;
-  return '<h1>Coach</h1><div class="chat" aria-live="polite" id="chat">' + (c.msgs.length ? msgs : intro) + '</div>' +
-    '<div class="composer"><button class="icon-btn" data-act="mock-open" data-kind="voice" aria-label="Inspreken (voorbeeld)" style="flex:none">' + SVG('<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/>').replace('<svg','<svg width="22" height="22"') + '</button><label class="sr" for="coachInput">Bericht aan de coach</label><textarea id="coachInput" rows="1" placeholder="Schrijf je vraag…">' + esc(c.draft) + '</textarea>' +
+  return '<div class="row"><h1>Coach</h1><span class="spacer"></span><button class="btn ghost small" data-act="coach-more" aria-expanded="' + !!c.more + '">' + (c.more ? 'Minder' : 'Meer') + '</button></div>' + meer + '<div class="chat" aria-live="polite" id="chat">' + (c.msgs.length ? msgs : intro) + '</div>' +
+    '<div class="composer"><label class="sr" for="coachInput">Bericht aan de coach</label><textarea id="coachInput" rows="1" placeholder="Schrijf je vraag…">' + esc(c.draft) + '</textarea>' +
     (c.busy ? '<button class="btn danger" data-act="coach-stop">Stop</button>' : '<button class="btn" data-act="coach-send">Stuur</button>') + '</div>' +
     (c.msgs.length ? '<div class="row"><button class="btn ghost small" data-act="coach-reset">Nieuw gesprek</button></div>' : '');
 }
 
+function checkBodyHtml() {
+    const k = state.check;
+    const flags = k.local;
+    return '<section class="card" aria-labelledby="h-chk"><h2 id="h-chk">Compliance-check</h2><p class="small muted">Plak een tekst of social post. De check wijst op inkomensbeloften en gezondheidsclaims en stelt een veilige versie voor. Het blijft een hulpmiddel: lees de regels van Young Living zelf ook.</p>' +
+      areaField('chk-text', 'Tekst', k.text, '', true) + '<div class="row"><button class="btn" data-act="check-run"' + (k.busy ? ' disabled' : '') + '>Controleer</button></div>' +
+      (flags ? '<div><h3>Snelle scan</h3>' + (flags.length ? '<div class="row" style="margin-top:8px">' + flags.map(f => pill(f.type + ': ' + f.term, 'due')).join('') + '</div>' : '<p class="small">Geen opvallende woorden gevonden.</p>') + '</div>' : '') +
+      (k.busy ? '<p class="muted">De coach leest mee…</p>' : '') +
+      (k.ai ? '<div><h3>Beoordeling</h3><div class="row" style="margin:8px 0">' + pill(k.ai.verdict || '?', k.ai.verdict === 'ok' ? '' : 'due') + '</div>' +
+        (k.ai.issues || []).map(i => '<div class="contact"><p><i>"' + esc(i.quote) + '"</i></p><p class="small">' + esc(i.why) + '</p><p class="small"><b>Veiliger:</b> ' + esc(i.fix) + '</p></div>').join('') +
+        (k.ai.rewrite ? '<h3 style="margin-top:12px">Voorgestelde versie</h3><div class="brief" style="white-space:pre-wrap">' + esc(k.ai.rewrite) + '</div><div class="row"><button class="btn ghost small" data-act="check-copy">Kopieer</button></div>' : '') + '</div>' : '') + '</section>';
+}
 function greeting() { const h = new Date().getHours(); return h < 12 ? 'Goedemorgen' : h < 18 ? 'Goedemiddag' : 'Goedenavond'; }
 function longDate() { return new Date().toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' }); }
 const field = (id, label, val, extra) => '<label class="f" for="' + id + '">' + label + '<input type="text" id="' + id + '" value="' + esc(val || '') + '" ' + (extra || '') + '></label>';
@@ -474,6 +488,7 @@ const optList = (arr, sel) => arr.map(x => '<option' + (x === sel ? ' selected' 
 /* ---------- Groei ---------- */
 const CT_TYPES = ['Instagram-post', 'Verhaal', 'Reel-script', 'WhatsApp-status', 'Blog-intro'];
 function viewGroei() {
+  if (state.sub.groei === 'Controle') state.sub.groei = 'Content';
   const sub = state.sub.groei; let body = '';
   if (sub === 'Content') {
     const c = state.content, items = contentItems(), p = profile();
@@ -488,16 +503,6 @@ function viewGroei() {
       (items.length ? items.map(i => '<div class="contact"><div class="row"><b>' + esc(fmtDate(i.date)) + '</b>' + pill(i.platform || 'Idee') + '<span class="spacer"></span><label class="sr" for="cs' + i.id + '">Status</label><select id="cs' + i.id + '" data-change="content-status" data-id="' + i.id + '" style="width:auto;min-height:36px;padding:4px 10px">' + optList(['Idee', 'Klaar', 'Geplaatst'], i.status) + '</select></div>' +
         '<p>' + esc(i.idea) + '</p>' + (i.text ? '<details><summary class="small" style="cursor:pointer;min-height:32px">Tekst</summary><p style="white-space:pre-wrap">' + esc(i.text) + '</p></details>' : '') +
         '<div class="row"><button class="btn ghost small" data-act="content-del" data-id="' + i.id + '">Verwijder</button></div></div>').join('') : '<p class="muted">Nog niets gepland.</p>') + '</section>';
-  } else if (sub === 'Controle') {
-    const k = state.check;
-    const flags = k.local;
-    body = '<section class="card" aria-labelledby="h-chk"><h2 id="h-chk">Compliance-check</h2><p class="small muted">Plak een tekst of social post. De check wijst op inkomensbeloften en gezondheidsclaims en stelt een veilige versie voor. Het blijft een hulpmiddel: lees de regels van Young Living zelf ook.</p>' +
-      areaField('chk-text', 'Tekst', k.text, '', true) + '<div class="row"><button class="btn" data-act="check-run"' + (k.busy ? ' disabled' : '') + '>Controleer</button></div>' +
-      (flags ? '<div><h3>Snelle scan</h3>' + (flags.length ? '<div class="row" style="margin-top:8px">' + flags.map(f => pill(f.type + ': ' + f.term, 'due')).join('') + '</div>' : '<p class="small">Geen opvallende woorden gevonden.</p>') + '</div>' : '') +
-      (k.busy ? '<p class="muted">De coach leest mee…</p>' : '') +
-      (k.ai ? '<div><h3>Beoordeling</h3><div class="row" style="margin:8px 0">' + pill(k.ai.verdict || '?', k.ai.verdict === 'ok' ? '' : 'due') + '</div>' +
-        (k.ai.issues || []).map(i => '<div class="contact"><p><i>"' + esc(i.quote) + '"</i></p><p class="small">' + esc(i.why) + '</p><p class="small"><b>Veiliger:</b> ' + esc(i.fix) + '</p></div>').join('') +
-        (k.ai.rewrite ? '<h3 style="margin-top:12px">Voorgestelde versie</h3><div class="brief" style="white-space:pre-wrap">' + esc(k.ai.rewrite) + '</div><div class="row"><button class="btn ghost small" data-act="check-copy">Kopieer</button></div>' : '') + '</div>' : '') + '</section>';
   } else {
     const f = state.docs.figures, rk = prefs().rank || {}, t = todayKey();
     const figHTML = f ? '<div class="tablewrap"><table><thead><tr>' + f.headers.map(h => '<th>' + esc(h) + '</th>').join('') + '</tr></thead><tbody>' + f.rows.slice(0, 12).map(r => '<tr>' + f.headers.map((_, i) => '<td>' + esc(r[i] || '') + '</td>').join('') + '</tr>').join('') + '</tbody></table></div><p class="small muted">' + esc(f.name || 'Import') + ' · ' + f.rows.length + ' rijen · ' + esc(new Date(f.importedAt).toLocaleDateString('nl-NL')) + '</p>' : '<p class="muted small">Nog geen cijfers. Exporteer ze uit je eigen backoffice als CSV en laad ze hier. Niemands wachtwoord is nodig.</p>';
@@ -1822,6 +1827,7 @@ async function onAct(a, el, ev) {
   if (a === 'inc') return bumpGoal(d.id, 1);
   if (a === 'dec') return bumpGoal(d.id, -1);
   if (a === 'overlay-close') { state.dialog = null; state.quiz = null; render(); return; }
+  if (a === 'coach-more') { state.coach.more = !state.coach.more; render(); return; }
   if (a === 'mock-open') { state.dialog = { type: 'mock', kind: d.kind }; render(); return; }
   if (a === 'mock-noop') { toast('Voorbeeld: deze functie werkt nog niet.'); return; }
   if (a === 'demo-load') { await loadDemo(); return; }
@@ -1874,12 +1880,12 @@ async function onAct(a, el, ev) {
   if (a === 'coach-stop') { if (state.coach.ctrl) state.coach.ctrl.abort(); return; }
   if (a === 'coach-reset') { state.coach.msgs = []; coachPush(); render(); return; }
   if (a === 'copy') { copyText(state.coach.msgs[parseInt(d.i, 10)].text); return; }
-  if (a === 'to-check') { state.check.text = state.coach.msgs[parseInt(d.i, 10)].text; state.check.local = null; state.check.ai = null; state.view = 'groei'; state.sub.groei = 'Controle'; render(); return; }
+  if (a === 'to-check') { state.check.text = state.coach.msgs[parseInt(d.i, 10)].text; state.check.local = null; state.check.ai = null; state.view = 'coach'; state.coach.more = true; render(); window.scrollTo(0, 0); return; }
   if (a === 'brief-run') { briefRun(); return; }
   /* content en controle */
   if (a === 'content-write') { contentWrite(); return; }
   if (a === 'content-copy') { copyText(state.content.out); return; }
-  if (a === 'content-check') { state.check.text = state.content.out; state.check.local = null; state.check.ai = null; state.sub.groei = 'Controle'; render(); return; }
+  if (a === 'content-check') { state.check.text = state.content.out; state.check.local = null; state.check.ai = null; state.view = 'coach'; state.coach.more = true; render(); window.scrollTo(0, 0); return; }
   if (a === 'content-plan') { save(uid('content'), { date: addDays(todayKey(), 1), platform: state.content.type, idea: state.content.topic || 'Idee', status: 'Klaar', text: state.content.out }); render(); toast('Ingepland voor morgen.'); return; }
   if (a === 'content-new') { state.dialog = { type: 'content', id: 'new' }; state.focusNext = true; render(); return; }
   if (a === 'content-save') { const idea = val('k-idea').trim(); if (!idea) { toast('Vul een idee in.'); return; } return closeAnd(() => save(uid('content'), { date: val('k-date') || todayKey(), platform: val('k-type'), idea, status: 'Idee', text: '' })); }
