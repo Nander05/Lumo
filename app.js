@@ -488,7 +488,7 @@ const optList = (arr, sel) => arr.map(x => '<option' + (x === sel ? ' selected' 
 /* ---------- Groei ---------- */
 const CT_TYPES = ['Instagram-post', 'Verhaal', 'Reel-script', 'WhatsApp-status', 'Blog-intro'];
 function viewGroei() {
-  if (state.sub.groei === 'Controle' || (state.sub.groei === 'Trend' && !allContacts().some(c => c.yl))) state.sub.groei = 'Content';
+  const hasVo = allContacts().some(c => c.yl); if (hasVo) state.sub.groei = 'Trend'; else if (state.sub.groei === 'Controle' || state.sub.groei === 'Trend') state.sub.groei = 'Content';
   const sub = state.sub.groei; let body = '';
   if (sub === 'Trend') {
     body = groeiOverzichtHtml();
@@ -525,7 +525,7 @@ function viewGroei() {
     }
     body = '<section class="card" aria-labelledby="h-fig"><div class="row"><h2 id="h-fig">Mijn cijfers</h2><span class="spacer"></span>' + (f ? '<button class="btn danger small" data-act="fig-clear">Verwijder</button>' : '') + '<label class="btn ghost small" for="figfile" style="cursor:pointer">CSV laden</label><input id="figfile" class="sr" type="file" accept=".csv,.txt,text/csv" data-change="fig-file"></div>' + figHTML + '</section>' + rank;
   }
-  return '<h1>Groei</h1>' + (profile() && profile().goal ? '<section class="card soft"><p class="eyebrow">Mijn lange termijndoel</p><p>' + esc(profile().goal) + '</p></section>' : '') + subTabs('groei') + body;
+  return '<h1>Groei</h1>' + (profile() && profile().goal ? '<section class="card soft"><p class="eyebrow">Mijn lange termijndoel</p><p>' + esc(profile().goal) + '</p></section>' : '') + (hasVo ? '' : subTabs('groei')) + body;
 }
 const FLAG_INCOME = /(verdien\w*|passief inkomen|financi[eë]le vrijheid|financieel vrij|stop met werken|extra inkomen|rijk worden|gegarandeerd\w*|garantie|zeker succes|ontslag\w*)/gi;
 const FLAG_HEALTH = /(genees\w*|geneeskrachtig\w*|behandel\w*|kanker|depressi\w*|angststoornis\w*|diabet\w*|ontsteking\w*|virus\w*|covid|corona|medicij\w*|ontgift\w*|voorkom\w*|beschermt tegen|vermindert pijn|slaapprobleem\w*|slaapproblemen|burn-out|adhd|autisme|allergie\w*)/gi;
@@ -1502,11 +1502,45 @@ function grTile(label, arr, ms) {
     '<div class="big">' + (cur != null ? orgFmt(cur) : '-') + '</div>' +
     '<div class="grbars">' + arr.map((v, i) => '<div class="grc"><div class="grb' + (i === n ? ' on' : '') + '" style="height:' + (v == null ? 3 : Math.max(4, Math.round(v / max * 56))) + 'px"></div><span>' + mn(ms[i]) + '</span></div>').join('') + '</div></div>';
 }
+const grNm = n => String(n || '').toLowerCase().replace(/(^|[\s-])\S/g, m => m.toUpperCase());
+function grBars(items) {
+  const max = Math.max.apply(null, items.map(i => i.v)) || 1;
+  return items.map(i => '<div class="hb"><span class="hl">' + esc(i.l) + '</span><span class="ht"><i style="width:' + Math.max(2, Math.round(i.v / max * 100)) + '%"></i></span><span class="hv">' + (i.t != null ? i.t : orgFmt(i.v)) + '</span></div>').join('');
+}
+function monthsSince(d) {
+  if (!d) return null; const t = todayKey(); return (Number(t.slice(0, 4)) * 12 + Number(t.slice(5, 7))) - (Number(String(d).slice(0, 4)) * 12 + Number(String(d).slice(5, 7)));
+}
 function groeiOverzichtHtml() {
-  const S = grSeries();
-  if (!allContacts().some(c => c.yl)) return '<div class="card soft"><p>Zodra je Virtual Office gekoppeld is, zie je hier hoe je organisatie per maand groeit.</p></div>';
+  const S = grSeries(), cs = allContacts().filter(c => c.yl), t = todayKey(), td = new Date().getDate();
+  if (!cs.length) return '<div class="card soft"><p>Zodra je Virtual Office gekoppeld is, zie je hier hoe je organisatie groeit.</p></div>';
+  const N = orgNodes(), kids = N.kids, desc = c => { const o = []; (function w(n) { (kids.get(n.id) || []).forEach(k => { o.push(k); w(k); }); })(c); return o; };
+  const act = cs.filter(c => (c.yl.pv || 0) > 0).length, lr = cs.filter(c => c.yl.au), lrShip = lr.filter(c => c.yl.aus).length, lrFail = cs.filter(c => orgNeeds(c) === 'LR niet verzonden').length, pj = mgProj();
+  const ogvNow = S.ogv[S.ogv.length - 1], pvAvg = act ? Math.round(cs.reduce((a, c) => a + (c.yl.pv || 0), 0) / act) : 0;
+  /* groepen */
+  const legs = cs.filter(c => Number(c.yl.lvl) === 1).map(c => { const d = desc(c); return { c, v: Math.round(c.yl.ogv || 0), n: d.length + 1, act: d.concat([c]).filter(x => (x.yl.pv || 0) > 0).length, lr: d.concat([c]).filter(x => x.yl.au).length }; }).filter(x => x.v > 0 || x.n > 1).sort((a, b) => b.v - a.v);
+  const legTot = legs.reduce((a, x) => a + x.v, 0) || 1;
+  /* niveaus */
+  const lv = {}; cs.forEach(c => { const l = c.yl.lvl; if (l == null) return; lv[l] = lv[l] || { n: 0, a: 0 }; lv[l].n++; if ((c.yl.pv || 0) > 0) lv[l].a++; });
+  const lvKeys = Object.keys(lv).sort((a, b) => a - b);
+  /* laatste bestelling */
+  const bk = { 'Deze maand': 0, '1 maand geleden': 0, '2 maanden': 0, '3 tot 5 maanden': 0, '6 maanden of langer': 0, 'Nooit besteld': 0 };
+  cs.forEach(c => { const m = monthsSince(c.yl.last); if (m == null) bk['Nooit besteld']++; else if (m <= 0) bk['Deze maand']++; else if (m === 1) bk['1 maand geleden']++; else if (m === 2) bk['2 maanden']++; else if (m <= 5) bk['3 tot 5 maanden']++; else bk['6 maanden of langer']++; });
+  /* nieuwe leden */
+  const lim = addDays(t, -45), nieuw = cs.filter(c => String(c.yl.since || '').slice(0, 10) >= lim).sort((a, b) => String(b.yl.since).localeCompare(String(a.yl.since)));
+  const nBest = nieuw.filter(c => c.yl.last && String(c.yl.last).slice(0, 10) >= String(c.yl.since).slice(0, 10)).length;
+  const top = cs.filter(c => (c.yl.pv || 0) > 0).sort((a, b) => b.yl.pv - a.yl.pv).slice(0, 6);
+  const sec = (h, body, note) => '<section class="card"><h2>' + h + '</h2>' + body + (note ? '<p class="small muted">' + note + '</p>' : '') + '</section>';
+  const facts = 'Mijn cijfers voor ' + new Date().toLocaleDateString('nl-NL', { month: 'long' }) + ': ' + cs.length + ' mensen, OGV ' + orgFmt(ogvNow || 0) + ' (verwacht einde maand ' + orgFmt((ogvNow || 0) + pj.add) + '), ' + act + ' leden met bestelling, ' + lr.length + ' met Loyalty Rewards (' + lrFail + ' niet verzonden), ' + nieuw.length + ' nieuwe leden in 45 dagen waarvan ' + nBest + ' al besteld hebben. Sterkste groepen: ' + legs.slice(0, 3).map(x => grNm(x.c.name) + ' ' + orgFmt(x.v) + ' OGV').join(', ') + '. Wat valt op, wat is mijn grootste kans en wat doe ik deze week? Maximaal drie punten, met waarde of nieuwe info voor mensen, zonder beloftes.';
   return '<section class="card"><h2>Je organisatie</h2>' + grTile('Mensen in totaal', S.tot, S.ms) + grTile('Nieuwe leden', S.nw, S.ms) + grTile('OGV', S.ogv, S.ms) + grTile('Leden met bestelling', S.act, S.ms) +
-    '<p class="small muted">Nieuwe leden en het totaal komen uit de lidmaatschapsdatum, dus die lopen terug in de tijd. OGV en bestellingen worden bijgehouden vanaf de eerste koppeling (november). De huidige maand is nog niet af.</p></section>';
+    '<p class="small muted">Nieuwe leden en het totaal lopen terug in de tijd. OGV en bestellingen worden bijgehouden vanaf november. De huidige maand is nog niet af.</p>' +
+    '<div class="row"><button class="btn small" data-act="coach-chip" data-prompt="' + esc(facts) + '">Wat zeggen mijn cijfers?</button></div></section>' +
+    sec('Deze maand in cijfers', '<div class="ostats" style="padding:4px 0"><div class="ost"><b>' + orgFmt(ogvNow || 0) + '</b><span class="small muted">OGV nu</span></div><div class="ost"><b>' + orgFmt((ogvNow || 0) + pj.add) + '</b><span class="small muted">verwacht</span></div><div class="ost"><b>' + act + '</b><span class="small muted">besteld</span></div><div class="ost"><b>' + orgFmt(pvAvg) + '</b><span class="small muted">gem. PV</span></div></div>', 'Verwacht = huidige OGV plus de Loyalty Rewards die nog gepland staan. Gem. PV is per lid dat besteld heeft.') +
+    sec('Je groepen', grBars(legs.slice(0, 8).map(x => ({ l: grNm(x.c.name), v: x.v, t: orgFmt(x.v) + ' · ' + Math.round(x.v / legTot * 100) + '%' }))) + '<p class="small muted" style="margin-top:6px">Per groep: ' + legs.slice(0, 8).map(x => grNm(x.c.name).split(' ')[0] + ' ' + x.n + ' mensen, ' + x.act + ' besteld, ' + x.lr + ' LR').join(' · ') + '</p>', 'Een groep is een eerste-lijnspersoon met zijn of haar hele downline. Het percentage is het aandeel in je OGV.') +
+    sec('Loyalty Rewards', '<div class="ostats" style="padding:4px 0"><div class="ost"><b>' + lr.length + '</b><span class="small muted">actief</span></div><div class="ost"><b>' + lrShip + '</b><span class="small muted">verzonden</span></div><div class="ost"><b>' + (lr.length - lrShip - lrFail) + '</b><span class="small muted">nog gepland</span></div><div class="ost"><b>' + lrFail + '</b><span class="small muted">niet verzonden</span></div></div><p class="small">Nog te verwachten uit gepland: <b>' + orgFmt(pj.add) + ' PV</b>. ' + Math.round(lr.length / cs.length * 100) + '% van je mensen heeft Loyalty Rewards.</p>') +
+    sec('Wanneer bestelden ze voor het laatst', grBars(Object.keys(bk).map(k => ({ l: k, v: bk[k], t: String(bk[k]) })))) +
+    sec('Niveaus', grBars(lvKeys.map(k => ({ l: 'Niveau ' + k, v: lv[k].n, t: lv[k].n + ' · ' + lv[k].a + ' besteld' }))), 'Hoe diep je organisatie gaat en hoeveel mensen per niveau actief zijn.') +
+    sec('Nieuwe leden (45 dagen)', nieuw.length ? '<p class="small">' + nBest + ' van ' + nieuw.length + ' hebben al besteld.</p>' + nieuw.slice(0, 8).map(c => '<div class="hb"><span class="hl" style="width:55%">' + esc(grNm(c.name)) + '</span><span class="small muted" style="flex:1">' + esc(fmtDate(String(c.yl.since).slice(0, 10))) + '</span><span class="hv">' + (c.yl.last && String(c.yl.last).slice(0, 10) >= String(c.yl.since).slice(0, 10) ? 'besteld' : 'nog niet') + '</span></div>').join('') : '<p class="muted">Geen nieuwe leden in de laatste 45 dagen.</p>') +
+    sec('Grootste bestellers deze maand', top.length ? grBars(top.map(c => ({ l: grNm(c.name), v: c.yl.pv, t: orgFmt(c.yl.pv) + ' PV' }))) : '<p class="muted">Nog geen bestellingen deze maand.</p>');
 }
 const ORG_FILTERS = { Klant: ['Actie nodig', 'Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'], Teamlid: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'] };
 function orgListHtml(kind) {
