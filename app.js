@@ -1398,13 +1398,17 @@ function orgPrio(c) {
 /* ---------- Vandaag: maanddoel en Nu doen ---------- */
 try { state.mgOpen = localStorage.getItem('lumo-mgopen') === '1'; } catch (e) {}
 const MG_METRICS = { pv: 'OGV', rankSilver: 'Rang Silver', rankGold: 'Rang Gold', new: 'Nieuwe leden', act: 'Leden met bestelling' };
-/* Regels van het Europese compensatieplan op één plek. Bron: openbare YL-plantekst plus controle tegen YL Insights (19 nov 2026).
-   Controle: unilevel EUR 328 en persoonlijke generatie EUR 124 kwamen uit op EUR 327 en EUR 124. Fast Start gaf EUR 21 tegen EUR 18 bij YL.
-   Niet gemodelleerd: leiderschapsbonus (gedeelde pot), rangbonussen, generaties 2 tot 4, eigen 100 PV, afhoudingen. */
+/* Regels van het Europese compensatieplan op één plek.
+   Bron: YL "Comp Plan" trainingen 1 tot 3 (EU, 19 nov 2026) en controle tegen YL Insights (unilevel EUR 328 en persoonlijke generatie EUR 124
+   kwamen uit op EUR 329 en EUR 125; Fast Start EUR 21 tegen EUR 18).
+   Niet gemodelleerd: leiderschapsbonus (gedeelde pot), generaties 2 tot 4, rangbonus, starterkitbonus (EUR 22), eigen 100 PV, afhoudingen.
+   Let op: Fast Start gaat naar de enroller en niet naar de sponsor; de extensie kent alleen de sponsor. */
 const PLAN = {
   ranks: { Silver: { ogv: 10000, legs: 2, leg: 4000, pgv: 1000 }, Gold: { ogv: 35000, legs: 3, leg: 6000, pgv: 1000 } },
   unilevel: [0.08, 0.05, 0.04, 0.04, 0.04], depthByOgv: [[4000, 5], [2000, 4], [500, 3], [0, 2]], qualPv: 100,
-  fastStart: { l1: 0.25, l2: 0.10, minPv: 50, months: 3, otherPayoutShare: 0.3 }, personalGeneration: 0.025, eurPerPv: 0.875
+  fastStart: { l1: 0.25, l2: 0.10, minPv: 50, months: 3, otherPayoutShare: 0.3, capPvPerMonth: 1000 },
+  personalGeneration: 0.025, generation2plus: 0.03, eurPerPv: 0.88,
+  rankBonus: { 'Senior Star': 88, Executive: 132, Silver: 176, months: 3 }, starterKitBonus: 22
 };
 const RANKS = PLAN.ranks;
 const mgRank = g => g && g.metric.indexOf('rank') === 0 ? g.metric.slice(4) : '';
@@ -1556,11 +1560,11 @@ const COMM_RATES = PLAN.unilevel, COMM_EUR = PLAN.eurPerPv;
 function commEst(scen) {
   const N = orgNodes(), d = new Date(), td = d.getDate(), x = new Date(d.getFullYear(), d.getMonth() - (PLAN.fastStart.months - 1), 1), lim = x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-01';
   const base = c => scen === 'now' ? (c.yl.pv || 0) : (c.yl.pv || 0) + (c.yl.au && !c.yl.aus && Number(c.yl.au) >= td ? (c.yl.aupv || 0) : 0);
-  const isFs = c => String(c.yl.since || '').slice(0, 10) >= lim && base(c) >= PLAN.fastStart.minPv, vol = c => isFs(c) ? base(c) * PLAN.fastStart.otherPayoutShare : base(c);
+  const isFs = c => String(c.yl.since || '').slice(0, 10) >= lim && base(c) >= PLAN.fastStart.minPv, vol = c => isFs(c) ? base(c) * PLAN.fastStart.otherPayoutShare : base(c), fsPv = c => Math.min(base(c), PLAN.fastStart.capPvPerMonth);
   const per = [0, 0, 0, 0, 0]; let fs = 0, all = 0;
   const walk = (n, level, carry) => {
     const kids = N.kids.get(n.id) || [], v = vol(n); all += vol(n);
-    if (isFs(n)) { if (Number(n.yl.lvl) === 1) fs += base(n) * PLAN.fastStart.l1; else if (Number(n.yl.lvl) === 2) fs += base(n) * PLAN.fastStart.l2; }
+    if (isFs(n)) { if (Number(n.yl.lvl) === 1) fs += fsPv(n) * PLAN.fastStart.l1; else if (Number(n.yl.lvl) === 2) fs += fsPv(n) * PLAN.fastStart.l2; }
     if (base(n) >= PLAN.qualPv) { if (level <= 5) per[level - 1] += v + carry; kids.forEach(k => walk(k, level + 1, 0)); }
     else {
       const best = kids.slice().sort((a, b) => base(b) - base(a))[0];
@@ -1604,7 +1608,7 @@ function commHtml() {
     (silverNow ? '<p class="small">Met Silver komt er persoonlijke generatie bij, ongeveer <b>' + eur(b.gen) + '</b>.</p>' : '<p class="small">Haal je <b>Silver</b>, dan komt er persoonlijke generatie bij (2,5% op je groepen), ongeveer <b>+' + eur(b.gen) + '</b> per maand bij dit volume.</p>') +
     (ref ? '<p class="small muted">Ter vergelijking, ' + esc(mnm(ref.month)) + ' echt: unilevel ' + eur(ref.uni) + ', Fast Start ' + eur(ref.fs) + ', leiderschapsbonus ' + eur(ref.glb) + ', samen ' + eur(ref.total) + '.</p>' : '') +
     (state.chAdd ? '<div class="mgdet"><label class="f" for="ch-m">Maand<select id="ch-m">' + opts + '</select></label><label class="f" for="ch-v">Totaal verdiend in euro<input id="ch-v" inputmode="decimal" placeholder="bijvoorbeeld 521,82"></label><div class="row"><button class="btn small" data-act="org-ch-save">Opslaan</button><button class="btn ghost small" data-act="org-ch-add">Annuleer</button></div></div>' : '<div class="row"><button class="btn ghost small" data-act="org-ch-add">Vorige maand toevoegen</button></div>') +
-    '<p class="small muted">Gebaseerd op het Europese plan: 8, 5 en 4% op vijf niveaus met compressie onder 100 PV, Fast Start 25% en 10% op de eerste drie maanden, en 1 PV als ongeveer \u20ac0,88, afgestemd op de schatting in YL Insights. Het is een schatting en geen belofte van inkomen. De leiderschapsbonus, rangbonussen en afhoudingen zitten er niet in.</p>';
+    '<p class="small muted">Gebaseerd op het Europese plan: 8, 5 en 4% op vijf niveaus met compressie onder 100 PV, Fast Start 25% en 10% op de eerste drie maanden, en 1 PV als \u20ac0,88 (de omrekenkoers van YL zelf). Het is een schatting en geen belofte van inkomen. De leiderschapsbonus, rangbonussen en afhoudingen zitten er niet in.</p>';
   return gsec('comm', 'Commissie', body, null, true, '≈ ' + eur(est));
 }
 const ORG_FILTERS = { Klant: ['Actie nodig', 'Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'], Teamlid: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'] };

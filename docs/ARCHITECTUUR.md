@@ -10,7 +10,7 @@
 Vandaag (maanddoel en Nu doen), Mensen (opzoeken), Coach (hulp en berichten, met compliance-check onder Meer), Groei (Commissie, trend en organisatie), plus Team, Campagnes en Instellingen.
 
 ## Plan-regels
-Alle regels van het compensatieplan staan in `PLAN` bovenin `src/parts/org.js`, met de bron en de controle tegen YL Insights. Pas daar iets aan als het plan wijzigt, nergens anders.
+Alle regels van het compensatieplan staan in `PLAN` bovenin `src/parts/org.js`. Bron: de YL-trainingen Comp Plan 1 tot 3 (EU). De omrekenkoers 1 PV = €0,88 is de officiële peg rate van YL. Controle: YL Insights van 19 nov 2026. Pas daar iets aan als het plan wijzigt, nergens anders.
 
 ## Bekende beperkingen
 - Niet in de berekening: leiderschapsbonus, rangbonussen, generaties 2 tot 4, eigen 100 PV, afhoudingen.
