@@ -59,7 +59,7 @@ const libAll = () => sh('library').concat(sh('glibrary').map(i => Object.assign(
 const LEADER_ONLY = ['shares', 'help', 'campshares'];
 const SUBS = {
   mensen: ['Prospects', 'Klanten', 'Organisatie', 'Workshops'],
-  groei: ['Content', 'Cijfers'],
+  groei: ['Trend', 'Content', 'Cijfers'],
   team: ['Bibliotheek', 'Campagnes', 'Training', 'Draaiboek', 'Agenda', 'Uitdaging', 'Mentor', 'Erkenning', 'Hulp', 'Overzicht']
 };
 const SVG = p => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
@@ -135,7 +135,7 @@ const store = {
 
 /* ---------- state ---------- */
 const state = {
-  ready: false, view: 'vandaag', sub: { mensen: 'Prospects', groei: 'Content', team: 'Bibliotheek' },
+  ready: false, view: 'vandaag', sub: { mensen: 'Prospects', groei: 'Trend', team: 'Bibliotheek' },
   docs: {}, shared: {}, libSearch: '', libCat: 'Alles',
   wiz: { step: 0, consent: false, name: '', goal: '', why: '', tone: 'warm', goals: clone(SUGGEST) },
   dialog: null, coach: { msgs: [], busy: false, ctrl: null, draft: '' }, brief: null,
@@ -363,7 +363,7 @@ async function aiJSON(prompt) {
 
 /* ---------- gedeelde stukjes ---------- */
 function subTabs(view) {
-  let list = SUBS[view].filter(s => s !== 'Overzicht' || store.isAdmin);
+  let list = SUBS[view].filter(s => (s !== 'Overzicht' || store.isAdmin) && (s !== 'Trend' || allContacts().some(c => c.yl)));
   return '<div class="seg" role="group" aria-label="Onderdeel">' + list.map(s => '<button class="chip" data-act="sub" data-view="' + view + '" data-sub="' + s + '" aria-pressed="' + (state.sub[view] === s) + '">' + s + (view === 'team' && s === 'Bibliotheek' && newLibCount() ? ' <span class="dot" aria-label="nieuw"></span>' : '') + '</button>').join('') + '</div>';
 }
 function pill(t, cls) { return '<span class="pill' + (cls ? ' ' + cls : '') + '">' + esc(t) + '</span>'; }
@@ -488,9 +488,11 @@ const optList = (arr, sel) => arr.map(x => '<option' + (x === sel ? ' selected' 
 /* ---------- Groei ---------- */
 const CT_TYPES = ['Instagram-post', 'Verhaal', 'Reel-script', 'WhatsApp-status', 'Blog-intro'];
 function viewGroei() {
-  if (state.sub.groei === 'Controle') state.sub.groei = 'Content';
+  if (state.sub.groei === 'Controle' || (state.sub.groei === 'Trend' && !allContacts().some(c => c.yl))) state.sub.groei = 'Content';
   const sub = state.sub.groei; let body = '';
-  if (sub === 'Content') {
+  if (sub === 'Trend') {
+    body = groeiOverzichtHtml();
+  } else if (sub === 'Content') {
     const c = state.content, items = contentItems(), p = profile();
     body = '<section class="card" aria-labelledby="h-ct"><h2 id="h-ct">Schrijf in jouw stem</h2>' +
       (p.voice ? '' : '<p class="small muted">Tip: plak in Instellingen een voorbeeld van je eigen schrijfstijl, dan klinkt het meer als jou.</p>') +
@@ -1466,6 +1468,36 @@ function nuDoenHtml() {
   return '<section aria-labelledby="h-nu"><h2 id="h-nu" style="margin:6px 0">Nu doen <span class="small muted">' + l.length + '</span></h2><div class="orgl">' +
     top.map(x => '<div class="orgc"><button class="orgc-main" data-act="contact-edit" data-id="' + x.c.id + '"><b>' + esc(x.c.name) + '</b><span class="orgc-why due">' + esc(x.why) + '</span></button><button class="btn small" data-act="org-now" data-id="' + x.c.id + '">Wat nu?</button></div>').join('') + '</div>' +
     (l.length > 5 ? '<div class="row" style="margin-top:8px"><button class="btn ghost small" data-act="goto" data-view="mensen" data-sub="Klanten">Alle ' + l.length + ' bekijken</button></div>' : '') + '</section>';
+}
+
+/* ---------- Groei: overzicht per maand ---------- */
+function grMonths(n) {
+  const out = [], d = new Date(); d.setDate(1);
+  for (let i = n - 1; i >= 0; i--) { const x = new Date(d.getFullYear(), d.getMonth() - i, 1); out.push(x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0')); }
+  return out;
+}
+function grSeries() {
+  const ms = grMonths(6), cs = allContacts().filter(c => c.yl), l1 = cs.filter(c => Number(c.yl.lvl) === 1);
+  const has = m => cs.some(c => c.hist && c.hist[m]);
+  const ogv = ms.map(m => has(m) ? Math.round(l1.reduce((a, c) => a + ((c.hist && c.hist[m] && c.hist[m].ogv) || 0), 0)) : null);
+  const act = ms.map(m => has(m) ? cs.filter(c => c.hist && c.hist[m] && c.hist[m].pv > 0).length : null);
+  const nw = ms.map(m => cs.filter(c => String(c.yl.since || '').slice(0, 7) === m).length);
+  const tot = ms.map(m => cs.filter(c => String(c.yl.since || '').slice(0, 7) <= m).length);
+  return { ms, ogv, act, nw, tot };
+}
+function grTile(label, arr, ms) {
+  const n = arr.length - 1, cur = arr[n], prev = arr[n - 1], max = Math.max.apply(null, arr.map(v => v || 0)) || 1;
+  const d = cur != null && prev != null ? cur - prev : null, arrow = d == null ? '' : d > 0 ? '↑' : d < 0 ? '↓' : '→';
+  const mn = m => new Date(m + '-01').toLocaleDateString('nl-NL', { month: 'short' }).replace('.', '');
+  return '<div class="grt"><div class="row" style="align-items:baseline"><span class="small muted">' + esc(label) + '</span><span class="spacer"></span>' + (d != null ? '<span class="small ' + (d < 0 ? 'down' : 'up') + '">' + arrow + ' ' + (d > 0 ? '+' : '') + orgFmt(d) + ' t.o.v. vorige maand</span>' : '') + '</div>' +
+    '<div class="big">' + (cur != null ? orgFmt(cur) : '-') + '</div>' +
+    '<div class="grbars">' + arr.map((v, i) => '<div class="grc"><div class="grb' + (i === n ? ' on' : '') + '" style="height:' + (v == null ? 3 : Math.max(4, Math.round(v / max * 56))) + 'px"></div><span>' + mn(ms[i]) + '</span></div>').join('') + '</div></div>';
+}
+function groeiOverzichtHtml() {
+  const S = grSeries();
+  if (!allContacts().some(c => c.yl)) return '<div class="card soft"><p>Zodra je Virtual Office gekoppeld is, zie je hier hoe je organisatie per maand groeit.</p></div>';
+  return '<section class="card"><h2>Je organisatie</h2>' + grTile('Mensen in totaal', S.tot, S.ms) + grTile('Nieuwe leden', S.nw, S.ms) + grTile('OGV', S.ogv, S.ms) + grTile('Leden met bestelling', S.act, S.ms) +
+    '<p class="small muted">Nieuwe leden en het totaal komen uit de lidmaatschapsdatum, dus die lopen terug in de tijd. OGV en bestellingen worden bijgehouden vanaf de eerste koppeling (november). De huidige maand is nog niet af.</p></section>';
 }
 const ORG_FILTERS = { Klant: ['Actie nodig', 'Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'], Teamlid: ['Alles', 'Loyalty Rewards', 'Geen LR', 'Lang niet besteld'] };
 function orgListHtml(kind) {
