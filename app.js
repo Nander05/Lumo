@@ -729,7 +729,7 @@ function overlayHTML() {
     inner = '<h2>' + (isNew ? 'Nieuw contact' : 'Contact bewerken') + '</h2>' + field('c-name', 'Naam', c.name, 'data-autofocus') +
       '<label class="f" for="c-kind">Soort<select id="c-kind">' + optList(KINDS, c.kind || 'Prospect') + '</select></label>' +
       '<label class="f" for="c-stage">Fase<select id="c-stage">' + optList(STAGES, c.stage) + '</select></label>' + dateField('c-next', 'Volgend contact', c.next) + dateField('c-birth', 'Verjaardag (optioneel)', c.birthday) +
-      '<fieldset class="fs"><legend>Alleen voor klanten</legend>' + dateField('c-last', 'Laatste bestelling', c.lastOrder) + '<label class="f" for="c-cycle">Gemiddelde cyclus in dagen<input type="number" id="c-cycle" min="1" max="365" value="' + esc(c.cycle || '') + '"></label></fieldset>' +
+      '<fieldset class="fs"><legend>Alleen voor klanten</legend>' + dateField('c-last', 'Laatste bestelling', c.lastOrder) + '<label class="f" for="c-cycle">Gemiddelde cyclus in dagen (hoe vaak deze klant bestelt, bv. 30 = elke maand)<input type="number" id="c-cycle" min="1" max="365" value="' + esc(c.cycle || '') + '"></label></fieldset>' +
       '<fieldset class="fs"><legend>Alleen voor teamleden</legend>' + dateField('c-start', 'Startdatum', c.startDate) + '</fieldset>' + areaField('c-note', 'Notitie', c.note) + orgYlHtml(c) + campInfoHtml(c) + btns('contact-save', d.id, 'contact-del');
   }
   if (d.type === 'event') {
@@ -1445,6 +1445,8 @@ function orgNetHtml() {
 function orgYlHtml(c) {
   const y = c && c.yl; if (!y) return ''; const a = orgAvg(c), rows = [['Loyalty Rewards', y.au ? 'Ja, dag ' + y.au : 'Nee'], ['Laatst besteld', y.mwo != null ? orgAgo(y.mwo) : '-'], ['PV deze maand', orgFmt(y.pv || 0)], ['Gemiddelde PV', a ? orgFmt(a.avg) + ' (over ' + a.n + ' maand' + (a.n === 1 ? '' : 'en') + ')' : '-']];
   if (c.kind === 'Teamlid') { rows.push(['OGV', orgFmt(y.ogv || 0)], ['PGV', orgFmt(y.pgv || 0)]); if (y.i != null) rows.push(['Direct in je lijn', String(y.kids || 0)]); }
+  if (y.pm) { const sp = Object.keys(state.docs).map(k => state.docs[k]).find(x => x && x.yl && String(x.yl.mid) === String(y.pm)); if (sp) rows.push(['Sponsor', sp.name]); } if (y.since) rows.push(['Lid sinds', fmtDate(String(y.since).slice(0, 10))]);
+  const sig = []; if (y.mwo >= 4) sig.push(y.mwo + ' maanden zonder bestelling'); if (y.au && !y.aus && y.last && String(y.last).slice(0, 7) !== todayKey().slice(0, 7) && new Date().getDate() > Number(y.au) + 1) sig.push('Loyalty Rewards van deze maand is niet verzonden'); if (!y.au && y.last) sig.push('Bestelt los, zonder Loyalty Rewards'); if (y.au && y.aus) sig.push('Loyalty Rewards is deze maand verzonden'); if (y.pv >= 100) sig.push('Al ' + orgFmt(y.pv) + ' PV deze maand'); if (sig.length) rows.push(['Opvallend', sig.join('. ')]);
   if (y.lvl) rows.push(['Niveau', String(y.lvl)]); if (y.act) rows.push(['Actief sinds', fmtDate(y.act)]); if (y.phone) rows.push(['Telefoon', y.phone]); if (y.city) rows.push(['Plaats', y.city]);
   return '<details class="pinfo" open><summary>Cijfers uit je rapport</summary><dl>' + rows.map(r => '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd>').join('') + '</dl></details>';
 }
@@ -1474,15 +1476,34 @@ function voFeedHtml() {
     '<div class="row">' + (un ? '<button class="btn ghost small" data-act="vo-seen">Alles gelezen</button>' : '') + (perm ? '<button class="btn ghost small" data-act="vo-notify">Meldingen aanzetten</button>' : '') + '</div></section>';
 }
 
-/* diepe links uit meldingen: ?open=<contact-id> opent die persoon, ?v=<tab> een tabblad */
-window.__deep = (function () { try { const p = new URLSearchParams(location.search), o = p.get('open'), v = p.get('v'); if (o || v) { history.replaceState(null, '', location.pathname); return { open: o, v: v }; } } catch (e) { /* geen URL-ondersteuning */ } return null; })();
+/* diepe links uit meldingen: ?open=<contact-id>&e=<soort> opent de coach met die persoon, ?v=<tab> een tabblad */
+const DEEP_ASK = {
+  order: 'heeft net besteld. Wat kan ik nu voor deze persoon doen?',
+  new: 'is nieuw in mijn team. Wat zijn de beste eerste stappen in de eerste dagen?',
+  stop: 'heeft de Loyalty Rewards (autoship) gestopt. Wat kan ik doen?',
+  fail: 'heeft een Loyalty Rewards-bestelling die niet verzonden is. Wat kan ik doen?',
+  idle: 'heeft al vier maanden niet besteld. Wat kan ik doen?'
+};
+function deepFacts(c) {
+  const y = c.yl || {};
+  return [c.kind || 'Prospect', y.lvl ? 'niveau ' + y.lvl : '', y.since ? 'lid sinds ' + fmtDate(String(y.since).slice(0, 10)) : '', y.au ? 'Loyalty Rewards op dag ' + y.au + ' (' + orgFmt(y.aupv || 0) + ' PV)' : 'geen Loyalty Rewards', y.last ? 'laatste bestelling ' + fmtDate(String(y.last).slice(0, 10)) + ' (' + orgFmt(y.lpv || 0) + ' PV)' : '', y.mwo ? y.mwo + ' maanden zonder bestelling' : '', 'PV deze maand ' + orgFmt(y.pv || 0), c.kind === 'Teamlid' ? 'OGV ' + orgFmt(y.ogv || 0) + ', ' + (y.kids || 0) + ' direct' : '', c.stage ? 'fase ' + c.stage : '', c.note ? 'notitie: ' + c.note : ''].filter(Boolean).join('; ');
+}
+window.__deep = (function () { try { const p = new URLSearchParams(location.search), o = p.get('open'), v = p.get('v'), e = p.get('e'); if (o || v) { history.replaceState(null, '', location.pathname); return { open: o, v: v, e: e }; } } catch (x) { /* geen URL-ondersteuning */ } return null; })();
 function deepGo(t) {
   if (!t) return false;
-  if (t.open) { const c = state.docs[t.open]; if (!c) return false; state.view = 'mensen'; state.sub.mensen = c.kind === 'Teamlid' ? 'Teamleden' : 'Klanten'; state.dialog = { type: 'contact', id: t.open }; state.focusNext = false; render(); window.scrollTo(0, 0); return true; }
+  if (t.open) {
+    const c = state.docs[t.open]; if (!c) return false;
+    if (t.e && DEEP_ASK[t.e]) {
+      state.view = 'coach'; state.dialog = null; render(); window.scrollTo(0, 0);
+      coachSend('Melding uit mijn organisatie: ' + c.name + ' ' + DEEP_ASK[t.e] + ' Wat ik weet: ' + deepFacts(c) + '. Geef maximaal twee concrete acties, elk met een reden die nieuwe info of waarde bevat (geen losse check-in), en één kort bericht dat ik kan sturen met iets nuttigs erin. Zeg erbij als je iets mist om dit goed te doen.');
+      return true;
+    }
+    state.view = 'mensen'; state.sub.mensen = c.kind === 'Teamlid' ? 'Teamleden' : 'Klanten'; state.dialog = { type: 'contact', id: t.open }; state.focusNext = false; render(); window.scrollTo(0, 0); return true;
+  }
   if (t.v) { state.view = t.v; state.dialog = null; render(); window.scrollTo(0, 0); return true; }
   return false;
 }
-if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { const m = e.data; if (m && m.lumoOpen) { try { const p = new URL(m.lumoOpen, location.href).searchParams, t = { open: p.get('open'), v: p.get('v') }; if (!state.ready || !deepGo(t)) window.__deep = t; } catch (x) { /* ongeldige link */ } } });
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { const m = e.data; if (m && m.lumoOpen) { try { const p = new URL(m.lumoOpen, location.href).searchParams, t = { open: p.get('open'), v: p.get('v'), e: p.get('e') }; if (!state.ready || !deepGo(t)) window.__deep = t; } catch (x) { /* ongeldige link */ } } });
 
 /* ---------- web-versie: team, uitloggen en account (alleen in de eigen webapp) ---------- */
 window.__web = true;
