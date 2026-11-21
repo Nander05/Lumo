@@ -1740,13 +1740,14 @@ const DEEP_ASK = {
 };
 function deepFacts(c) {
   const y = c.yl || {};
-  return [c.kind || 'Prospect', y.lvl ? 'niveau ' + y.lvl : '', y.since ? 'lid sinds ' + fmtDate(String(y.since).slice(0, 10)) : '', y.au ? 'Loyalty Rewards op dag ' + y.au + ' (' + orgFmt(y.aupv || 0) + ' PV)' : 'geen Loyalty Rewards', y.last ? 'laatste bestelling ' + fmtDate(String(y.last).slice(0, 10)) + ' (' + orgFmt(y.lpv || 0) + ' PV)' : '', y.mwo ? y.mwo + ' maanden zonder bestelling' : '', 'PV deze maand ' + orgFmt(y.pv || 0), c.kind === 'Teamlid' ? 'OGV ' + orgFmt(y.ogv || 0) + ', ' + (y.kids || 0) + ' direct' : '', c.stage ? 'fase ' + c.stage : '', c.note ? 'notitie: ' + c.note : ''].filter(Boolean).join('; ');
+  return [c.kind || 'Prospect', y.lvl ? 'niveau ' + y.lvl : '', y.since ? 'lid sinds ' + fmtDate(String(y.since).slice(0, 10)) : '', y.au ? 'Loyalty Rewards op dag ' + y.au + ' (' + orgFmt(y.aupv || 0) + ' PV)' : 'geen Loyalty Rewards', y.last ? 'laatste bestelling ' + fmtDate(String(y.last).slice(0, 10)) + ' (' + orgFmt(y.lpv || 0) + ' PV)' : '', y.mwo ? y.mwo + ' maanden zonder bestelling' : '', 'PV deze maand ' + orgFmt(y.pv || 0) + (y.last && !(y.pv > 0) && String(y.last).slice(0, 7) === todayKey().slice(0, 7) ? ' (de laatste bestelling is nog niet in de PV bijgeschreven, dus waarschijnlijk niet afgerond)' : ''), c.kind === 'Teamlid' ? 'OGV ' + orgFmt(y.ogv || 0) + ', ' + (y.kids || 0) + ' direct' : '', c.stage ? 'fase ' + c.stage : '', c.note ? 'notitie: ' + c.note : ''].filter(Boolean).join('; ');
 }
 window.__deep = (function () { try { const p = new URLSearchParams(location.search), o = p.get('open'), v = p.get('v'), e = p.get('e'); if (o || v) { history.replaceState(null, '', location.pathname); return { open: o, v: v, e: e }; } } catch (x) { /* geen URL-ondersteuning */ } return null; })();
 function deepGo(t) {
   if (!t) return false;
   if (t.open) {
     const c = state.docs[t.open]; if (!c) return false;
+    if (t.e === 'order' && c.yl && !(c.yl.pv > 0) && c.yl.last) t.e = 'pend';
     if (t.e && DEEP_ASK[t.e]) {
       state.view = 'coach'; state.dialog = null; render(); window.scrollTo(0, 0);
       coachSend('Melding uit mijn organisatie: ' + c.name + ' ' + DEEP_ASK[t.e] + ' Wat ik weet: ' + deepFacts(c) + '. Geef maximaal twee concrete acties, elk met een reden die nieuwe info of waarde bevat (geen losse check-in), en één kort bericht dat ik kan sturen met iets nuttigs erin. Zeg erbij als je iets mist om dit goed te doen.');
