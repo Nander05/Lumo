@@ -1477,7 +1477,7 @@ function nuDoen() {
   const needs = allContacts().filter(c => c.yl).map(c => ({ c, n: orgNeeds(c) })).filter(x => x.n);
   needs.filter(x => x.n === 'LR niet verzonden').forEach(x => add(x.c, x.n, 0));
   { const g = state.docs.mgoal, rk = mgRank(g); if (rk) { const L = mgLegs(rk); L.top.forEach((x, i) => { if (x.v < L.R.leg) add(x.c, 'Groep ' + (i + 1) + ' mist nog ' + orgFmt(L.R.leg - x.v) + ' OGV voor ' + rk, 0.5, 'leg'); }); } }
-  voOrders().filter(e => (e.t === 'new' || e.t === 'conv' || e.t === 'stop') && String(e.at || '').slice(0, 10) >= lim && state.docs[e.cid]).forEach(e => add(Object.assign({ id: e.cid }, state.docs[e.cid]), voLabel(e), 1));
+  voOrders().filter(e => (e.t === 'new' || e.t === 'conv' || e.t === 'stop' || e.t === 'pend') && String(e.at || '').slice(0, 10) >= lim && state.docs[e.cid]).forEach(e => add(Object.assign({ id: e.cid }, state.docs[e.cid]), voLabel(e), 1));
   dueContacts().forEach(c => add(c, 'Opvolging gepland', 2));
   needs.filter(x => x.n.indexOf('Bestelmoment') === 0).forEach(x => add(x.c, x.n, 3));
   needs.filter(x => x.n.indexOf('mnd') > -1).forEach(x => add(x.c, x.n, 4));
@@ -1712,7 +1712,7 @@ function orgAct(a, d) {
 /* live bestellingen uit het VO (komen binnen via de extensie en de vo-ingest functie) */
 const voOrders = () => Object.keys(state.docs).filter(i => i.startsWith('vobest-')).map(i => Object.assign({ id: i }, state.docs[i])).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
 function voWhen(at) { const d = (at || '').slice(0, 10), t = (at || '').slice(11, 16), td = todayKey(); return (d === td ? 'vandaag' : d ? d.slice(8, 10) + '/' + d.slice(5, 7) : '') + (t ? ' ' + t : ''); }
-const voLabel = e => ({ new: 'Nieuw lid', conv: 'Prospect werd lid', stop: 'Autoship gestopt', fail: 'Autoship niet verzonden', idle: 'Geen bestelling' })[e.t] || (e.first ? 'Eerste bestelling' : e.lr ? 'Loyalty Rewards' : 'Eenmalig');
+const voLabel = e => ({ new: 'Nieuw lid', conv: 'Prospect werd lid', stop: 'Autoship gestopt', fail: 'Autoship niet verzonden', idle: 'Geen bestelling', pend: 'Bestelling niet bevestigd', lrchg: 'LR gewijzigd' })[e.t] || (e.first ? 'Eerste bestelling' : e.lr ? 'Loyalty Rewards' : 'Eenmalig');
 function voNotifyNew(l) {
   window.__voSeenN = window.__voSeenN || new Set();
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
@@ -1734,6 +1734,8 @@ const DEEP_ASK = {
   stop: 'heeft de Loyalty Rewards (autoship) gestopt. Wat kan ik doen?',
   fail: 'heeft een Loyalty Rewards-bestelling die niet verzonden is. Wat kan ik doen?',
   idle: 'heeft al vier maanden niet besteld. Wat kan ik doen?',
+  pend: 'heeft een bestelling waarvan de PV nog niet is bijgeschreven (mogelijk een betaalprobleem). Wat kan ik doen?',
+  lrchg: 'heeft het geplande Loyalty Rewards-bedrag gewijzigd. Wat kan ik doen?',
   conv: 'was een prospect en heeft nu een account in mijn organisatie. Wat is de beste eerste stap?'
 };
 function deepFacts(c) {
