@@ -266,6 +266,13 @@
             var r = await sb.from('push_subs').upsert({ user_id: self, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, tz: tz, hour: hour || 8 }, { onConflict: 'endpoint' });
             if (r.error) throw r.error;
           },
+          heal: async function () {
+            var ok = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && !!CFG.vapidPublicKey;
+            if (!ok || (ios && !standalone) || Notification.permission !== 'granted') return false;
+            var reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
+            if (sub) { var r = await sb.from('push_subs').select('endpoint').eq('endpoint', sub.endpoint).maybeSingle(); if (r.error || r.data) return false; try { await sub.unsubscribe(); } catch (e) { /* */ } }
+            await this.enable(8); return true;
+          },
           disable: async function () {
             var reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
             if (sub) { await sb.from('push_subs').delete().eq('endpoint', sub.endpoint); await sub.unsubscribe(); }

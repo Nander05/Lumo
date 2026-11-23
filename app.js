@@ -1776,6 +1776,14 @@ function webTeamCard() {
 }
 
 let webPushSt = null, webPushLoading = false;
+/* meldingen herstellen: ontbreekt je toestel op de server (verlopen of verwijderd), meld je dan stil opnieuw aan */
+let webPushHealAt = 0;
+function webPushHeal() {
+  const W = window.__lumoWeb; if (!W || !W.push || !W.push.heal || Date.now() - webPushHealAt < 600000) return;
+  webPushHealAt = Date.now(); W.push.heal().then(h => { if (h) { webPushSt = null; toast('Meldingen opnieuw gekoppeld.'); } }).catch(() => {});
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') webPushHeal(); });
+setTimeout(webPushHeal, 4000);
 function webPushLoad(force) {
   const W = window.__lumoWeb; if (!W || !W.push || webPushLoading || (webPushSt && !force)) return;
   webPushLoading = true;
