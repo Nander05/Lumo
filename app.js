@@ -1712,7 +1712,7 @@ function orgAct(a, d) {
 /* live bestellingen uit het VO (komen binnen via de extensie en de vo-ingest functie) */
 const voOrders = () => Object.keys(state.docs).filter(i => i.startsWith('vobest-')).map(i => Object.assign({ id: i }, state.docs[i])).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
 function voWhen(at) { const d = (at || '').slice(0, 10), t = (at || '').slice(11, 16), td = todayKey(); return (d === td ? 'vandaag' : d ? d.slice(8, 10) + '/' + d.slice(5, 7) : '') + (t ? ' ' + t : ''); }
-const voLabel = e => ({ new: 'Nieuw lid', conv: 'Prospect werd lid', stop: 'Autoship gestopt', fail: 'Autoship niet verzonden', idle: 'Geen bestelling', pend: 'Bestelling niet bevestigd', lrchg: 'LR gewijzigd' })[e.t] || (e.first ? 'Eerste bestelling' : e.lr ? 'Loyalty Rewards' : 'Eenmalig');
+const voLabel = e => ({ new: 'Nieuw lid', conv: 'Prospect werd lid', stop: 'Autoship gestopt', fail: 'Autoship niet verzonden', idle: 'Geen bestelling', pend: 'Bestelling niet bevestigd', lrchg: 'LR gewijzigd', pvdrop: 'PV gedaald', ogvdrop: 'OGV gedaald' })[e.t] || (e.first ? 'Eerste bestelling' : e.lr ? 'Loyalty Rewards' : 'Eenmalig');
 function voNotifyNew(l) {
   window.__voSeenN = window.__voSeenN || new Set();
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
@@ -1735,6 +1735,7 @@ const DEEP_ASK = {
   fail: 'heeft een Loyalty Rewards-bestelling die niet verzonden is. Wat kan ik doen?',
   idle: 'heeft al vier maanden niet besteld. Wat kan ik doen?',
   pend: 'heeft een bestelling waarvan de PV nog niet is bijgeschreven (mogelijk een betaalprobleem). Wat kan ik doen?',
+  pvdrop: 'heeft dit maand minder PV dan eerder (mogelijk een annulering of terugbetaling). Wat kan ik doen?',
   lrchg: 'heeft het geplande Loyalty Rewards-bedrag gewijzigd. Wat kan ik doen?',
   conv: 'was een prospect en heeft nu een account in mijn organisatie. Wat is de beste eerste stap?'
 };
